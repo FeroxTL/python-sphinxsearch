@@ -162,6 +162,11 @@ class BaseTests(unittest.TestCase):
         engine.save()
         return engine
 
+    def test_index_name(self):
+        self.assertEqual(
+            (RakutenProducts.__sourcename__,),
+            RakutenProducts.get_index_names())
+
     def test_server_start(self):
         engine = self.local_engine
 
