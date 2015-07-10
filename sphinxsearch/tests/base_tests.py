@@ -132,7 +132,7 @@ class RakutenProducts(AnyshopProducts):
     pass
 
 
-class Test(unittest.TestCase):
+class BaseTests(unittest.TestCase):
     def setUp(self):
         import sphinxapi
 
@@ -188,7 +188,7 @@ class Test(unittest.TestCase):
         self.assertEqual(
             engine.commands.start(index=RakutenProducts),
             'searchd --config sphinx.conf --start --index '
-            '__main___rakutenproducts')
+            '{}'.format(RakutenProducts.__sourcename__))
 
         self.assertEqual(
             engine.commands.start(index='main'),
@@ -252,7 +252,8 @@ class Test(unittest.TestCase):
 
         self.assertEqual(
             engine.commands.reindex(RakutenProducts),
-            'indexer --config sphinx.conf __main___rakutenproducts --rotate')
+            'indexer --config sphinx.conf {} --rotate'.format(
+                RakutenProducts.__sourcename__))
 
         self.assertEqual(
             engine.commands.reindex(all=True, sighup_each=True),
@@ -263,16 +264,18 @@ class Test(unittest.TestCase):
             engine.commands.buildstops(RakutenProducts,
                                        outputfile='/tmp/stops.txt',
                                        limit=100),
-            'indexer --config sphinx.conf __main___rakutenproducts '
-            '--buildstops /tmp/stops.txt 100')
+            'indexer --config sphinx.conf {} '
+            '--buildstops /tmp/stops.txt 100'.format(
+                RakutenProducts.__sourcename__))
 
         self.assertEqual(
             engine.commands.buildstops(RakutenProducts,
                                        outputfile='/tmp/stops.txt',
                                        limit=100,
                                        freqs=True),
-            'indexer --config sphinx.conf __main___rakutenproducts '
-            '--buildstops /tmp/stops.txt 100 --buildfreqs'
+            'indexer --config sphinx.conf {} '
+            '--buildstops /tmp/stops.txt 100 --buildfreqs'.format(
+                RakutenProducts.__sourcename__)
             )
 
     def test_indexer_merge(self):
@@ -281,7 +284,8 @@ class Test(unittest.TestCase):
         self.assertEqual(
             engine.commands.merge(RakutenProducts, deleted=0),
             'indexer --config sphinx.conf --merge '
-            '__main___rakutenproducts --merge-dst-range deleted 0 0 --rotate')
+            '{} --merge-dst-range deleted 0 0 '
+            '--rotate'.format(RakutenProducts.__sourcename__))
 
     def test(self):
         engine = self.local_engine
@@ -303,8 +307,9 @@ class Test(unittest.TestCase):
                                        outputfile='tmp/bar.txt',
                                        limit=1000,
                                        freqs=True),
-            'indexer --config sphinx.conf __main___rakutenproducts '
-            'arena_products --buildstops tmp/bar.txt 1000 --buildfreqs')
+            'indexer --config sphinx.conf {} '
+            'arena_products --buildstops tmp/bar.txt 1000 '
+            '--buildfreqs'.format(RakutenProducts.__sourcename__))
 
         session = engine.get_session()
 

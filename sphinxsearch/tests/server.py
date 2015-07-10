@@ -10,7 +10,8 @@ from sphinxsearch.session import Session
 from sphinxsearch.exceptions import ConfigError
 
 
-class Test(unittest.TestCase):
+class ServerTests(unittest.TestCase):
+
     def setUp(self):
         import sphinxapi
         self.api = sphinxapi
@@ -28,7 +29,18 @@ class Test(unittest.TestCase):
     def test_server(self):
         self.assertEqual(
             self.server.get_options(),
-            {'server': {'log': 'logpath', 'listen': '0.0.0.0:1234'}})
+            {'server': {
+                'log': 'logpath',
+                'max_children': 0,
+                'workers': 'prefork',
+                'max_matches': 10000,
+                'pid_file': '/tmp/searchd.pid',
+                'read_timeout': 5,
+                'preopen_indexes': True,
+                'seamless_rotate': True,
+                'listen': '0.0.0.0:1234',
+                'client_timeout': 300
+            }})
 
         with self.assertRaises(ConfigError):
             self.assertIsInstance(self.server.get_session(), Session)

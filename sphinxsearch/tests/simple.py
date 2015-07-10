@@ -6,7 +6,7 @@ import unittest
 from sphinxsearch.tests.base_tests import RakutenProducts
 
 
-class Test(unittest.TestCase):
+class SimpleTests(unittest.TestCase):
     def test(self):
 
         print RakutenProducts
