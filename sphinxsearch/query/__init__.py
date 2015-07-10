@@ -4,7 +4,6 @@ from __future__ import unicode_literals
 from six import string_types
 
 from ..models.attrs import AbstractAttr
-from ..utils.cmd_tools import requires_kwarg
 from .groupby import GroupByOperator
 from .filters import BaseFilterOperator, Any
 from .orderby import AbtractSortMode, Attr

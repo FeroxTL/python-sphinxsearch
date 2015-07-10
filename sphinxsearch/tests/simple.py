@@ -3,9 +3,14 @@ from __future__ import unicode_literals
 
 import unittest
 
+from sphinxsearch.tests.base_tests import RakutenProducts
+
 
 class Test(unittest.TestCase):
     def test(self):
-        from .config1 import RakutenProducts
 
         print RakutenProducts
+
+
+if __name__ == '__main__':
+    unittest.main()

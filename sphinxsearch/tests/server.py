@@ -26,13 +26,17 @@ class Test(unittest.TestCase):
         self.indexer = indexer
 
     def test_server(self):
-        print self.server.get_options()
+        self.assertEqual(
+            self.server.get_options(),
+            {'server': {'log': 'logpath', 'listen': '0.0.0.0:1234'}})
 
         with self.assertRaises(ConfigError):
             self.assertIsInstance(self.server.get_session(), Session)
 
     def test_indexer(self):
-        print self.indexer.get_options()
+        self.assertEqual(
+            self.indexer.get_options(),
+            {'indexer': {'mem_limit': '32M'}})
 
     def test_engine(self):
         engine = Engine()
@@ -45,5 +49,5 @@ class Test(unittest.TestCase):
         self.assertIsInstance(engine.get_session(), Session)
 
 
-
-
+if __name__ == '__main__':
+    unittest.main()
