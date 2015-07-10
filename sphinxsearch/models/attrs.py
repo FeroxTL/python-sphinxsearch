@@ -26,14 +26,13 @@ class AbstractAttr(with_metaclass(ABCMeta, object)):
 class AbstractUnitAttr(AbstractAttr):
     @abstractproperty  # pragma: no cover
     def type_str():
-        """"""
+        pass
 
-    def get_type(self):
-        source_type = self.model.source_type
+    def get_type(self, source_type):
         return '%s_attr_%s' % (source_type, self.type_str)
 
-    def get_option(self):
-        return self.get_type(), self.name
+    def get_option(self, attr_name, source_type):
+        return self.get_type(source_type), attr_name
 
 
 class Int(AbstractUnitAttr):

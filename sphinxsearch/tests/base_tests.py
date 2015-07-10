@@ -7,6 +7,9 @@ from tempfile import gettempdir
 from os.path import join
 
 from sphinxsearch.models import Index, Int, String, Bool, TimeStamp, MVA, Float, PgsqlSource
+from sphinxsearch.tests._base_tests_settings import (
+    TEST_ENGINE_SCHEMA_SETTINGS_LIST, TEST_ENGINE_SETTINGS
+)
 
 
 HOST = 'localhost'
@@ -14,28 +17,6 @@ PORT = '4321'
 TMP_ROOT = join(gettempdir())
 MAX_MATCHES = 10000
 LOG_DIR = join(TMP_ROOT, 'logs')
-
-
-TEST_ENGINE_SETTINGS = """indexer
-{
-    mem_limit = 32M
-}
-
-server
-{
-    log = /tmp/logs/searchd.log
-    max_children = 0
-    workers = prefork
-    max_matches = 10000
-    pid_file = /tmp/searchd.pid
-    max_filter_values = 8192
-    read_timeout = 5
-    preopen_indexes = True
-    seamless_rotate = True
-    listen = localhost:4321
-    client_timeout = 300
-}
-"""
 
 
 def get_indexer():
@@ -133,6 +114,8 @@ class RakutenProducts(AnyshopProducts):
 
 
 class BaseTests(unittest.TestCase):
+    maxDiff = None
+
     def setUp(self):
         import sphinxapi
 
@@ -178,7 +161,7 @@ class BaseTests(unittest.TestCase):
             engine.commands.start(),
             'searchd --config sphinx.conf --start')
 
-        logdebugs = [
+        LOGDEBUGS = [
             'searchd --config sphinx.conf --start',
             'searchd --config sphinx.conf --start --logdebug',
             'searchd --config sphinx.conf --start --logdebugv',
@@ -188,7 +171,7 @@ class BaseTests(unittest.TestCase):
         for i in range(0, 4):
             self.assertEqual(
                 engine.commands.start(logdebug=i),
-                logdebugs[i])
+                LOGDEBUGS[i])
 
         self.assertEqual(
             engine.commands.start(index=RakutenProducts),
@@ -317,6 +300,16 @@ class BaseTests(unittest.TestCase):
             '--buildfreqs'.format(RakutenProducts.__sourcename__))
 
         session = engine.get_session()
+
+    def test_engine_indexes(self):
+        engine = self.engine_with_schema
+
+        config = engine.create_config()
+        parts = [part.format(RakutenProducts.__sourcename__)
+                 for part in TEST_ENGINE_SCHEMA_SETTINGS_LIST]
+
+        for part in parts:
+            self.assertTrue(part in config)
 
 
 if __name__ == '__main__':
