@@ -10,7 +10,8 @@ from .orderby import AbtractSortMode, Attr
 
 
 class QuerySettingsMixin(object):
-    def setUp(self):
+    def __init__(self):
+        super(QuerySettingsMixin, self).__init__()
         self.offset = 0
         self.limit = 0
         self.max_matches = 0
@@ -37,7 +38,8 @@ class QuerySettingsMixin(object):
 
 
 class FilterMixin(object):
-    def setUp(self):
+    def __init__(self):
+        super(FilterMixin, self).__init__()
         self.filters = {}
         self.geo_anchor = None
 
@@ -49,7 +51,8 @@ class FilterMixin(object):
 
 
 class SearchSettingsMixin(object):
-    def setUp(self):
+    def __init__(self):
+        super(SearchSettingsMixin, self).__init__()
         self.sort_modes = []
 
     def set_sort_mode(self, sort_mode):
@@ -57,7 +60,8 @@ class SearchSettingsMixin(object):
 
 
 class GroupBySettingsMixin(object):
-    def setUp(self):
+    def __init__(self):
+        super(GroupBySettingsMixin, self).__init__()
         self.group_by = None
         self.group_by_distinct = None
 
@@ -69,7 +73,8 @@ class GroupBySettingsMixin(object):
 
 
 class UpdateMixin(object):
-    def setUp(self):
+    def __init__(self):
+        super(UpdateMixin, self).__init__()
         self.update = False
 
     def set_update(self, attrs, values):
@@ -78,16 +83,12 @@ class UpdateMixin(object):
         self.values = values
 
 
-class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin, UpdateMixin):
+class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
+                   UpdateMixin):
     def __init__(self, indexes_str):
+        super(QueryBackend, self).__init__()
         self.indexes_str = indexes_str
         self.term = ''
-
-        QuerySettingsMixin.setUp(self)
-        FilterMixin.setUp(self)
-        SearchSettingsMixin.setUp(self)
-        GroupBySettingsMixin.setUp(self)
-        UpdateMixin.setUp(self)
 
     def result_handler(self, *args, **kwargs):
         if self.handler:
@@ -95,7 +96,6 @@ class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin, Update
 
     def build_excerpts(self, docs, words, **options):
         pass
-
 
 
 def clone_method(method):
@@ -122,8 +122,6 @@ class Query(object):
 
     @clone_method
     def filter(self, **filters):
-        """
-        """
         for attr_name, attr_filter in filters:
             if not isinstance(attr_filter, BaseFilterOperator):
                 attr_filter = Any(attr_filter)
@@ -144,14 +142,14 @@ class Query(object):
         self.query.set_group_by(field)
 
     @clone_method
-    def geo(self, lat_field, long_field, lat, long):
+    def geo(self, lat_field, long_field, lat, lon):
         """
             SetGeoAnchor
         """
         self.query.set_geo_anchor(unicode(lat_field),
                                   unicode(long_field),
                                   float(lat),
-                                  float(long))
+                                  float(lon))
 
     @clone_method
     def like(self, query):
