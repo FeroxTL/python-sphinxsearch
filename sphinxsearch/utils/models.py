@@ -13,9 +13,8 @@ def replaced_query(query, **kwargs):
         if old in query:
             query = query.replace(old, new)
         else:
-            validation_logger.warning("""Can not found user placeholder "%s"
-                                         for "%s" sphinx placeholder""" % (old, new))
+            validation_logger.warning(
+                'Can not found user placeholder "{}" for "{}" '
+                'sphinx placeholder'.format(old, new))
 
     return query
-
-

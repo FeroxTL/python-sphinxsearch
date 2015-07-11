@@ -9,14 +9,13 @@ class SessionFactory(object):
         self.server = server
 
     def __call__(self):
-        api = self.server.api
-        host = self.server.host
-        port = self.server.port
-        return Session(api, host, port)
+        return Session(
+            api=self.server.api,
+            host=self.server.host,
+            port=self.server.port)
 
 
 class Session(object):
-
     def __init__(self, api, host, port):
         self.api = api
         self.host = host

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+from __future__ import unicode_literals, absolute_import
 
 from six import with_metaclass
 
@@ -9,17 +9,16 @@ from .expr import BaseExpr
 
 
 class AbtractSortMode(with_metaclass(ABCMeta, object)):
-
     @abstractproperty  # pragma: no cover
     def api_const():
-        """"""
+        pass
 
     def get_api_option(self, engine):
         return getattr(engine.api, self.api_const)
 
     @abstractproperty  # pragma: no cover
     def expr():
-        """"""
+        pass
 
     def __init__(self, expr):
         self.expr = expr
@@ -104,4 +103,3 @@ class Expr(AbtractSortMode):
         if isinstance(expr, BaseExpr):
             expr = expr.toString()
         self.expr = expr
-

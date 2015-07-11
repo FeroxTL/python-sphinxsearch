@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+from __future__ import unicode_literals, absolute_import
 
 from six import string_types
 
 from os.path import join
 
 from ..query.filters import Range
-from ..utils.cmdtools import (cmd_flag, cmd_decorator,
-                              check_options, cmd_named_kwarg,
-                              cmd_named_arg, requires_kwarg)
+from ..utils.cmdtools import (
+    cmd_flag, cmd_decorator, check_options, cmd_named_kwarg, cmd_named_arg,
+    requires_kwarg
+)
 
 
 def index_to_str(*index):
@@ -21,7 +22,8 @@ def index_to_str(*index):
     elif len(index) == 2:
         return ' '.join(index)
     else:
-        raise ValueError('index must be two strings or have get_index_names method ')
+        raise ValueError(
+            'index must be two strings or have get_index_names method ')
 
 
 def cmd_loglevel_option(func):

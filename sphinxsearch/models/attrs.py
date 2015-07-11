@@ -1,12 +1,19 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+from __future__ import unicode_literals, absolute_import
 
 from six import with_metaclass
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 
-from .const import (SQL_SOURCE_TYPE, XML_SOURCE_TYPE, RT_SOURCE_TYPE,
-                    RANGE_QUERY_START, RANGE_QUERY_END)
+from .const import (
+    SQL_SOURCE_TYPE, XML_SOURCE_TYPE, RT_SOURCE_TYPE, RANGE_QUERY_START,
+    RANGE_QUERY_END
+)
+
+__all__ = [
+    'Int', 'BigInt', 'Bool', 'Float', 'TimeStamp', 'String', 'StringOrd',
+    'WordCount', 'MVA',
+]
 
 
 class AbstractAttr(with_metaclass(ABCMeta, object)):
@@ -16,7 +23,7 @@ class AbstractAttr(with_metaclass(ABCMeta, object)):
 
     @abstractmethod  # pragma: no cover
     def get_option(self, attr_name, source_type):
-        """"""
+        pass
 
     def bind(self, model, name):
         self.binded = True
@@ -69,7 +76,8 @@ class WordCount(AbstractUnitAttr):
 
 class MVA(AbstractAttr):
     def __init__(self, attr_type, query=None):
-        assert issubclass(attr_type, AbstractUnitAttr), 'attr_type mut be AbstractUnitAttr subtype'
+        if not issubclass(attr_type, AbstractUnitAttr):
+            raise TypeError('attr_type mut be AbstractUnitAttr subtype')
         self.attr_type_str = attr_type.type_str
         self.attr_type = attr_type
         self._query = query
@@ -122,7 +130,3 @@ class MVA(AbstractAttr):
             return self.get_rt_option(attr_name)
         else:
             raise RuntimeError('Unknown source_type: %s' % source_type)
-
-
-__all__ = ['Int', 'BigInt', 'Bool', 'Float', 'TimeStamp',
-           'String', 'StringOrd', 'WordCount', 'MVA']

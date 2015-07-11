@@ -45,7 +45,8 @@ class All(BaseFilterOperator):
 
         for value in values:
             if isinstance(value, self.__class__):
-                raise ValueError('passing All operator to itself is not allowed')
+                raise ValueError(
+                    'passing All operator to itself is not allowed')
             if isinstance(value, BaseFilterOperator):
                 sub_ops.append(value)
             else:

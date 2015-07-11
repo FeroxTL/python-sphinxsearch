@@ -45,12 +45,16 @@ def cmd_decorator(func):
         try:
             cmd_splitted = func(*args, **kwargs)
         except CmdUnknownOptionException as e:
-            raise TypeError("%s are an invalid keyword arguments for this function" % e.message)
+            raise TypeError(
+                "{} are an invalid keyword arguments for this function".format(
+                    e.message)
+                )
         except RequiredOptionException as e:
-            raise TypeError("you must provide '%s' argument" % e.message)
+            raise TypeError("you must provide '{}' argument".format(e.message))
         except CmdOptionConflictException as e:
             option, conflicted = e.option, e.conflicted
-            raise TypeError('option %s conflictz with options; %s' % (option, conflicted))
+            raise TypeError('option {} conflicts with options; {}'.format(
+                option, conflicted))
         else:
             return ' '.join(cmd_splitted)
     return wrapper

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals, print_function
+from __future__ import unicode_literals, print_function, absolute_import
 
 from six import with_metaclass
 
@@ -8,19 +8,20 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from .const import RT_SOURCE_TYPE, SQL_SOURCE_TYPE, XML_SOURCE_TYPE
 
 
-__all__ = ['RT', 'ODBC', 'XML', 'MysqlCertificate',
-           'MysqlSource', 'MssqlSource', 'PgsqlSource']
+__all__ = [
+    'RT', 'ODBC', 'XML', 'MysqlCertificate', 'MysqlSource', 'MssqlSource',
+    'PgsqlSource',
+]
 
 
 class AbstractIndexType(with_metaclass(ABCMeta, object)):
-
     @abstractmethod  # pragma: no cover
     def get_option_dicts(index, attrs_conf):
-        """"""
+        pass
 
     @abstractproperty  # pragma: no cover
     def source_type():
-        """"""
+        pass
 
 
 class RT(AbstractIndexType):
@@ -40,7 +41,6 @@ class RT(AbstractIndexType):
 
 
 class AbstractSourceType(AbstractIndexType):
-
     def get_option_dicts(self, index, attrs_options):
         option_dicts = {}
 
@@ -55,7 +55,6 @@ class AbstractSourceType(AbstractIndexType):
         return option_dicts
 
     def get_source_options(self, index, attrs_options):
-        print(attrs_options)
         return attrs_options
 
     def get_index_options(self, index):
@@ -167,6 +166,3 @@ class MssqlSource(BaseDB):
 class PgsqlSource(BaseDB):
     def __init__(self, *args, **kwargs):
         super(PgsqlSource, self).__init__('pgsql', *args, **kwargs)
-
-
-

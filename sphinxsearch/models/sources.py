@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+
 from abc import ABCMeta
 
 from six import with_metaclass
@@ -25,7 +27,8 @@ class IndexMeta(ABCMeta):
 
         cls_attr_names = [nm for nm in dir(src_cls) if not nm.startswith('__')]
 
-        cls_dict = dict([(name, getattr(src_cls, name)) for name in cls_attr_names])
+        cls_dict = dict([(name, getattr(src_cls, name)) for name in
+                         cls_attr_names])
 
         if not is_abstract(src_cls):
             cls.validate(src_cls)
@@ -37,7 +40,8 @@ class IndexMeta(ABCMeta):
 
             src_cls.__attrs__ = source_attrs_dict
 
-        source_name = cls_dict.get('__sourcename__') or cls.get_source_name(src_cls)
+        source_name = cls_dict.get('__sourcename__') or\
+            cls.get_source_name(src_cls)
         src_cls.__sourcename__ = source_name
 
         return src_cls
@@ -51,7 +55,8 @@ class IndexMeta(ABCMeta):
     @staticmethod
     def validate(src_cls):
         assert hasattr(src_cls, '__source__'), src_cls
-        assert isinstance(src_cls.__source__, AbstractIndexType), src_cls.__source__
+        assert isinstance(
+            src_cls.__source__, AbstractIndexType), src_cls.__source__
         pass
 
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+from __future__ import unicode_literals, absolute_import
 
 from six import string_types
 
@@ -7,6 +7,20 @@ from ..models.attrs import AbstractAttr
 from .groupby import GroupByOperator
 from .filters import BaseFilterOperator, Any
 from .orderby import AbtractSortMode, Attr
+
+
+# def clone_method(method):
+#     def wrapper(self, *args, **kwargs):
+#         if self._clonable:
+#             raise RuntimeError('Not clonable')
+#         method(self, *args, **kwargs)
+#         return self.clone()
+#     return wrapper
+
+def clone_method(method):
+    def wrapper(self, *args, **kwargs):
+        return self
+    return wrapper
 
 
 class QuerySettingsMixin(object):
@@ -98,17 +112,7 @@ class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
         pass
 
 
-def clone_method(method):
-    def wrapper(self, *args, **kwargs):
-        if self._clonable:
-            raise RuntimeError('Not clonable')
-        method(self, *args, **kwargs)
-        return self.clone()
-    return wrapper
-
-
 class Query(object):
-
     def __init__(self, index):
         if isinstance(index, string_types):
             indexes_str = unicode(index)

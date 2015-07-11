@@ -6,7 +6,9 @@ import unittest
 from tempfile import gettempdir
 from os.path import join
 
-from sphinxsearch.models import Index, Int, String, Bool, TimeStamp, MVA, Float, PgsqlSource
+from sphinxsearch.models import (
+    Index, Int, String, Bool, TimeStamp, MVA, Float, PgsqlSource
+)
 from sphinxsearch.tests._base_tests_settings import (
     TEST_ENGINE_SCHEMA_SETTINGS_LIST, TEST_ENGINE_SETTINGS
 )
@@ -73,7 +75,8 @@ class AbstractProductsIndex(Index):
     min_word_len = 2
 
     charset_type = 'utf-8'
-    charset_table = '0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F'
+    charset_table = ('0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, '
+                     'U+430..U+44F')
     min_infix_len = 2
     enable_star = 1
     query_info = 'SELECT * FROM "base_nazyaproduct" WHERE id=$id'
@@ -106,7 +109,9 @@ class AnyshopProducts(AbstractProductsIndex):
     modified_at = TimeStamp()
     created_at = TimeStamp()
 
-    property_values_ids = MVA(Int, query='SELECT "base_nazyaproduct_property_values"."nazyaproduct_id"')
+    property_values_ids = MVA(
+        Int,
+        query='SELECT "base_nazyaproduct_property_values"."nazyaproduct_id"')
 
 
 class RakutenProducts(AnyshopProducts):
@@ -275,10 +280,8 @@ class BaseTests(unittest.TestCase):
             '{} --merge-dst-range deleted 0 0 '
             '--rotate'.format(RakutenProducts.__sourcename__))
 
-    def test(self):
+    def test_conf(self):
         engine = self.local_engine
-
-        print(engine.get_session())
 
         self.assertEqual(
             engine.create_config(),
@@ -299,7 +302,12 @@ class BaseTests(unittest.TestCase):
             'arena_products --buildstops tmp/bar.txt 1000 '
             '--buildfreqs'.format(RakutenProducts.__sourcename__))
 
+    def test_session(self):
+        engine = self.local_engine
         session = engine.get_session()
+
+        import pdb
+        pdb.set_trace()
 
     def test_engine_indexes(self):
         engine = self.engine_with_schema

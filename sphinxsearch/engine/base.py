@@ -23,7 +23,7 @@ class ConfAttrProperty(object):
 class OptionableMeta(type):
     def __new__(cls, cls_name, cls_parents, cls_dict):
         if not hasattr(cls, 'OPTIONS'):
-            raise TypeError("Metaclass must provide OPTIONS  attribute")
+            raise TypeError("Metaclass must provide OPTIONS attribute")
 
         for opt_name in cls.OPTIONS:
             opt_prop = ConfAttrProperty(opt_name)
