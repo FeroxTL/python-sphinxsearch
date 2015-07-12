@@ -114,6 +114,7 @@ class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
 
 class Query(object):
     def __init__(self, index):
+        super(Query, self).__init__()
         if isinstance(index, string_types):
             indexes_str = unicode(index)
         else:
@@ -273,7 +274,6 @@ class Query(object):
     def raw_update(self, index, attrs, values):
         self._clonable = False
         self.query.set_update(attrs, values)
-        return self
         return self
 
     def keywords(self, query, hits=False):
