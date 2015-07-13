@@ -3,36 +3,32 @@ from __future__ import unicode_literals
 
 from itertools import product
 
+from sphinxsearch.models.types import XML, RT, MysqlSource, PgsqlSource
+from sphinxsearch import SearchServer, Indexer, Index
 
-def get_api():  # pragma: no cover
-    import sphinxapi
-    return sphinxapi
+
+def get_api():
+    return __import__('sphinxapi')
 
 
 def get_servers():
-    from sphinxsearch import SearchServer
-
     class MyServer(SearchServer):
-        listen = 'localhost:6543'
-        max_children = 10
+        # listen = 'localhost:6543'
+        # max_children = 10
         pid_file = '/tmp/myserver.pid'
 
     return [MyServer]
 
 
 def get_indexers():
-    from sphinxsearch import Indexer
-
     class MyIndexer(Indexer):
         mem_limit = '512M'
     return [MyIndexer]
 
 
 def get_index_types():
-    from sphinxsearch.models import DB, XML, RT
-
-    mysql_type = DB('MySQL', sock='sooo')
-    pgsql_type = DB('pgsql', host='localhost', port=5656)
+    mysql_type = MysqlSource(host='localhost', port=5656)
+    pgsql_type = PgsqlSource(host='localhost', port=5656)
     xml_type = XML('xml_command')
     rt_type = RT()
 
@@ -75,8 +71,6 @@ def get_schemas():
 
 
 def get_valid_indexes():
-    from sphinxsearch import Index
-
     index_type_list = get_index_types()
     delta_list = [False, True]
     is_abstract_lst = [False, True]

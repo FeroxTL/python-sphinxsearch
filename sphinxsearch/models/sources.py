@@ -6,7 +6,7 @@ from abc import ABCMeta
 from six import with_metaclass
 
 from .attrs import AbstractAttr
-from .types import AbstractIndexType
+# from .types import AbstractIndexType
 from ..utils import is_abstract, set_abstract
 
 
@@ -54,9 +54,9 @@ class IndexMeta(ABCMeta):
 
     @staticmethod
     def validate(src_cls):
-        assert hasattr(src_cls, '__source__'), src_cls
-        assert isinstance(
-            src_cls.__source__, AbstractIndexType), src_cls.__source__
+        # wtf?
+        # assert hasattr(src_cls, '__source__'), src_cls
+        # assert isinstance(src_cls.__source__, AbstractIndexType), src_cls.__source__
         pass
 
 

@@ -306,8 +306,8 @@ class BaseTests(unittest.TestCase):
         engine = self.local_engine
         session = engine.get_session()
 
-        import pdb
-        pdb.set_trace()
+        # import pdb
+        # pdb.set_trace()
 
     def test_engine_indexes(self):
         engine = self.engine_with_schema
