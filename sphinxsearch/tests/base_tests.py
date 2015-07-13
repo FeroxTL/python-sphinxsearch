@@ -303,11 +303,18 @@ class BaseTests(unittest.TestCase):
             '--buildfreqs'.format(RakutenProducts.__sourcename__))
 
     def test_session(self):
-        engine = self.local_engine
+        engine = self.engine_with_schema
         session = engine.get_session()
 
-        # import pdb
-        # pdb.set_trace()
+        from sphinxsearch.query import Query
+        qs = Query(RakutenProducts, engine.api)
+
+        import pdb
+        pdb.set_trace()
+
+        print(qs)
+        print(qs[:2])
+        print(qs[2])
 
     def test_engine_indexes(self):
         engine = self.engine_with_schema

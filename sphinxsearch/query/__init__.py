@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, absolute_import
 
-from six import string_types
+from six import string_types, integer_types
 
 from ..models.attrs import AbstractAttr
 from .groupby import GroupByOperator
 from .filters import BaseFilterOperator, Any
 from .orderby import AbtractSortMode, Attr
+
+
+REPR_OUTPUT_SIZE = 20
 
 
 # def clone_method(method):
@@ -19,6 +22,7 @@ from .orderby import AbtractSortMode, Attr
 
 def clone_method(method):
     def wrapper(self, *args, **kwargs):
+        self._clear_cache
         return self
     return wrapper
 
@@ -38,7 +42,7 @@ class QuerySettingsMixin(object):
     def set_override(self, attr_name, attr_type, update_dict):
         self.overrides[(attr_name, attr_type)] = update_dict
 
-    def set_limit(self, offset, limit, max_matches, cutoff):
+    def set_limits(self, offset, limit, max_matches=10000, cutoff=0):
         self.offset = offset
         self.limit = limit
         self.max_matches = max_matches
@@ -99,21 +103,30 @@ class UpdateMixin(object):
 
 class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
                    UpdateMixin):
+    def empty(self):
+        return []
+
+    def run_query(self):
+        return [1, 2, 3, 4]
+
     def __init__(self, indexes_str):
         super(QueryBackend, self).__init__()
         self.indexes_str = indexes_str
         self.term = ''
+        self.handler = None
 
     def result_handler(self, *args, **kwargs):
         if self.handler:
             return self.handler(*args, **kwargs)
+        else:
+            return self.run_query(*args, **kwargs)
 
     def build_excerpts(self, docs, words, **options):
         pass
 
 
 class Query(object):
-    def __init__(self, index):
+    def __init__(self, index, api):
         super(Query, self).__init__()
         if isinstance(index, string_types):
             indexes_str = unicode(index)
@@ -124,6 +137,53 @@ class Query(object):
         self._index = index
         self.query = QueryBackend(indexes_str)
         self._clonable = True
+        self._result_cache = None
+
+    def __len__(self, *args, **kwargs):
+        self._populate()
+        return len(self._result_cache)
+
+    def __repr__(self):
+        data = list(self[:REPR_OUTPUT_SIZE + 1])
+        if len(data) > REPR_OUTPUT_SIZE:
+            data[-1] = "...(remaining elements truncated)..."
+        return repr(data)
+
+    def __getitem__(self, k):
+        """
+        Retrieves an item or slice from the set of results.
+        """
+        if not isinstance(k, (slice,) + integer_types):
+            raise TypeError
+        assert ((not isinstance(k, slice) and (k >= 0)) or
+                (isinstance(k, slice) and (k.start is None or k.start >= 0) and
+                 (k.stop is None or k.stop >= 0))), \
+            "Negative indexing is not supported."
+
+        if self._result_cache is not None:
+            return self._result_cache[k]
+
+        qs = self
+        if isinstance(k, slice):
+            if k.start is not None:
+                start = int(k.start)
+            else:
+                start = None
+            if k.stop is not None:
+                stop = int(k.stop)
+            else:
+                stop = None
+            qs.query.set_limits(start, stop)
+            return list(qs)[::k.step] if k.step else qs
+
+        qs.query.set_limits(k, k + 1)
+        return list(qs)[0]
+
+    def _populate(self):
+        self._result_cache = self.query.result_handler()
+
+    def _clear_cache(self):
+        self._result_cache = None
 
     @clone_method
     def filter(self, **filters):
@@ -160,23 +220,17 @@ class Query(object):
     def like(self, query):
         pass
 
-    @clone_method
-    def __getitem__(self, i):
-        """
-            SetLimits
-        """
-        self.query.set_limit(int(i), int(i) + 1)
-
-    @clone_method
-    def __getslice__(self, start, end):
-        """
-            SetLimits
-        """
-        offset = self.query.offset + start
-        limit = self.query.limit - (end - start)
-        max_matches = self.query.max_matches
-        cutoff = self.query.cutoff
-        self.query.set_limit(offset, limit, max_matches, cutoff)
+    # deprecated since 2.0
+    # @clone_method
+    # def __getslice__(self, start, end):
+    #     """
+    #         SetLimits
+    #     """
+    #     offset = self.query.offset + start
+    #     limit = self.query.limit - (end - start)
+    #     max_matches = self.query.max_matches
+    #     cutoff = self.query.cutoff
+    #     self.query.set_limits(offset, limit, max_matches, cutoff)
 
     @clone_method
     def max(self, value):
@@ -187,7 +241,7 @@ class Query(object):
         limit = self.query.limit
         max_matches = int(value)
         cutoff = self.query.cutoff
-        self.query.set_limit(offset, limit, max_matches, cutoff)
+        self.query.set_limits(offset, limit, max_matches, cutoff)
 
     @clone_method
     def add_max(self, value):
@@ -206,7 +260,7 @@ class Query(object):
         limit = self.query.limit
         max_matches = self.max_matches
         cutoff = int(value)
-        self.query.set_limit(offset, limit, max_matches, cutoff)
+        self.query.set_limits(offset, limit, max_matches, cutoff)
 
     @clone_method
     def add_cutoff(self, value):
@@ -235,10 +289,6 @@ class Query(object):
     @clone_method
     def only(self, *fields):
         self.query.set_select(fields)
-
-    @clone_method
-    def populate(self):
-        pass
 
     @clone_method
     def override(self, attr, attr_type=None, **update_dict):
