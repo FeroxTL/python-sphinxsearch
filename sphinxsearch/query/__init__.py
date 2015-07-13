@@ -117,7 +117,7 @@ class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
 
     def result_handler(self, *args, **kwargs):
         if self.handler:
-            return self.handler(*args, **kwargs)
+            return self.handler(query=self, *args, **kwargs)
         else:
             return self.run_query(*args, **kwargs)
 
@@ -126,7 +126,7 @@ class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
 
 
 class Query(object):
-    def __init__(self, index, api):
+    def __init__(self, index, session):
         super(Query, self).__init__()
         if isinstance(index, string_types):
             indexes_str = unicode(index)
@@ -136,6 +136,7 @@ class Query(object):
 
         self._index = index
         self.query = QueryBackend(indexes_str)
+        self.query.handler = session.run
         self._clonable = True
         self._result_cache = None
 
@@ -178,6 +179,10 @@ class Query(object):
 
         qs.query.set_limits(k, k + 1)
         return list(qs)[0]
+
+    def __iter__(self):
+        self._populate()
+        return iter(self._result_cache)
 
     def _populate(self):
         self._result_cache = self.query.result_handler()

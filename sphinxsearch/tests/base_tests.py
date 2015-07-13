@@ -307,10 +307,10 @@ class BaseTests(unittest.TestCase):
         session = engine.get_session()
 
         from sphinxsearch.query import Query
-        qs = Query(RakutenProducts, engine.api)
+        qs = Query(RakutenProducts, session)
 
-        import pdb
-        pdb.set_trace()
+        # import pdb
+        # pdb.set_trace()
 
         print(qs)
         print(qs[:2])

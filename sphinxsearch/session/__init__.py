@@ -30,5 +30,6 @@ class Session(object):
     def close(self):
         self.conn.Close()
 
-    def run(self, *qs_list):
-        pass
+    def run(self, query, *qs_list):
+        print('run in Session')
+        return [1]
