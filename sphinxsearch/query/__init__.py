@@ -91,9 +91,7 @@ class GroupBySettingsMixin(object):
 
 
 class UpdateMixin(object):
-    def __init__(self):
-        super(UpdateMixin, self).__init__()
-        self.update = False
+    update = False
 
     def set_update(self, attrs, values):
         self.update = True
@@ -103,12 +101,6 @@ class UpdateMixin(object):
 
 class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
                    UpdateMixin):
-    def empty(self):
-        return []
-
-    def run_query(self):
-        return [1, 2, 3, 4]
-
     def __init__(self, indexes_str):
         super(QueryBackend, self).__init__()
         self.indexes_str = indexes_str
@@ -118,8 +110,7 @@ class QueryBackend(QuerySettingsMixin, FilterMixin, GroupBySettingsMixin,
     def result_handler(self, *args, **kwargs):
         if self.handler:
             return self.handler(query=self, *args, **kwargs)
-        else:
-            return self.run_query(*args, **kwargs)
+        raise RuntimeError('No result handler provided')
 
     def build_excerpts(self, docs, words, **options):
         pass

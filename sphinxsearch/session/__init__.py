@@ -32,4 +32,5 @@ class Session(object):
 
     def run(self, query, *qs_list):
         print('run in Session')
-        return [1]
+        print('term: "%s"' % query.term)
+        return [1, 2, 3]

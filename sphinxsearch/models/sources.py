@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
+import re
 from abc import ABCMeta
-
 from six import with_metaclass
 
 from .attrs import AbstractAttr
@@ -10,11 +10,16 @@ from .attrs import AbstractAttr
 from ..utils import is_abstract, set_abstract
 
 
+INDEX_NAME_RE = re.compile(ur'^[\w]+$')
+
+
 class IndexBase(object):
     __abstract__ = True
 
 
 class IndexMeta(ABCMeta):
+    __indexname__ = None
+
     def __new__(cls, cls_name, cls_parents, cls_dict):
         src_cls = ABCMeta.__new__(cls, cls_name, cls_parents, cls_dict)
 
@@ -57,7 +62,8 @@ class IndexMeta(ABCMeta):
         # wtf?
         # assert hasattr(src_cls, '__source__'), src_cls
         # assert isinstance(src_cls.__source__, AbstractIndexType), src_cls.__source__
-        pass
+        if src_cls.__indexname__:
+            assert re.match(INDEX_NAME_RE, src_cls.__indexname__)
 
 
 class Index(with_metaclass(IndexMeta, IndexBase)):
@@ -81,8 +87,12 @@ class Index(with_metaclass(IndexMeta, IndexBase)):
 
     @classmethod
     def get_index_names(cls):
-        names = (cls.__sourcename__,)
+        names = (cls.__indexname__ or cls.__sourcename__,)
         if cls.__delta__:
             delta_index_name = '{}_delta : {}'.format(cls.__sourcename__)
             names = names + (delta_index_name,)
         return names
+
+    @classmethod
+    def get_index_name(cls):
+        return cls.__indexname__ or cls.get_index_names()[0]

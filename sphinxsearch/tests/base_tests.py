@@ -316,11 +316,35 @@ class BaseTests(unittest.TestCase):
         print(qs[:2])
         print(qs[2])
 
+    def test_engine_index_with_name(self):
+        """
+        Index with __indexname__ config creation
+        """
+        engine = self.engine
+
+        class AnotherIndexProducts(RakutenProducts):
+            __indexname__ = 'another_index'
+
+        engine.add_index(AnotherIndexProducts)
+        config = engine.create_config()
+        parts = [part.format(AnotherIndexProducts.get_index_name())
+                 for part in TEST_ENGINE_SCHEMA_SETTINGS_LIST]
+
+        for part in parts:
+            self.assertTrue(part in config)
+
+        with self.assertRaises(AssertionError):
+            class AnotherIndexProducts(RakutenProducts):
+                __indexname__ = 'another index'
+
     def test_engine_indexes(self):
+        """
+        Index config creation
+        """
         engine = self.engine_with_schema
 
         config = engine.create_config()
-        parts = [part.format(RakutenProducts.__sourcename__)
+        parts = [part.format(RakutenProducts.get_index_name())
                  for part in TEST_ENGINE_SCHEMA_SETTINGS_LIST]
 
         for part in parts:

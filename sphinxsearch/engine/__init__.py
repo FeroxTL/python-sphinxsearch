@@ -15,9 +15,14 @@ class Engine(object):
         self._api = None
         self._server = None
         self._indexer = None
-        self._indexes = set()
+        self._indexes = dict()
         self.conf_file = None
         self.commands = CommandBuilder()
+
+        # class IndexMapper(object):
+        #     _indexes = {}
+
+        # self.indexes = IndexMapper()
 
     @property
     def api(self):
@@ -49,13 +54,14 @@ class Engine(object):
 
     @property
     def indexes(self):
-        return iter(self._indexes)
+        return iter(self._indexes.values())
 
     def add_index(self, index):
-        self._indexes.add(index)
+        self._indexes[index.get_index_name] = index
 
     def extend_indexes(self, indexes):
-        self._indexes.update(indexes)
+        self._indexes.update({index.get_index_name: index
+                              for index in indexes})
 
     def set_conf(self, conf_file):
         self.conf_file = conf_file
