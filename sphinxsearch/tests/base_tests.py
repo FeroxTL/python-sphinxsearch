@@ -144,6 +144,13 @@ class BaseTests(unittest.TestCase):
         return engine
 
     @property
+    def named_index(self):
+        class AnotherIndexProducts(RakutenProducts):
+            __indexname__ = 'another_index'
+
+        return AnotherIndexProducts
+
+    @property
     def local_engine(self):
         engine = self.engine
         engine.set_conf('sphinx.conf')
@@ -303,35 +310,36 @@ class BaseTests(unittest.TestCase):
             '--buildfreqs'.format(RakutenProducts.__sourcename__))
 
     def test_session(self):
-        engine = self.engine_with_schema
+        engine = self.engine
         session = engine.get_session()
 
         from sphinxsearch.query import Query
         qs = Query(RakutenProducts, session)
 
-        # import pdb
-        # pdb.set_trace()
-
         print(qs)
         print(qs[:2])
         print(qs[2])
+
+        engine.add_index(self.named_index)
+        qs = engine.indexes['another_index']
+
+        # import pdb
+        # pdb.set_trace()
 
     def test_engine_index_with_name(self):
         """
         Index with __indexname__ config creation
         """
         engine = self.engine
+        Index = self.named_index
 
-        class AnotherIndexProducts(RakutenProducts):
-            __indexname__ = 'another_index'
-
-        engine.add_index(AnotherIndexProducts)
+        engine.add_index(Index)
         config = engine.create_config()
-        parts = [part.format(AnotherIndexProducts.get_index_name())
+        parts = [part.format(Index.get_index_name())
                  for part in TEST_ENGINE_SCHEMA_SETTINGS_LIST]
 
         for part in parts:
-            self.assertTrue(part in config)
+            self.assertTrue(part in config, part)
 
         with self.assertRaises(AssertionError):
             class AnotherIndexProducts(RakutenProducts):
@@ -348,7 +356,7 @@ class BaseTests(unittest.TestCase):
                  for part in TEST_ENGINE_SCHEMA_SETTINGS_LIST]
 
         for part in parts:
-            self.assertTrue(part in config)
+            self.assertTrue(part in config, part)
 
 
 if __name__ == '__main__':

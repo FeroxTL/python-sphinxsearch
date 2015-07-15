@@ -15,14 +15,9 @@ class Engine(object):
         self._api = None
         self._server = None
         self._indexer = None
-        self._indexes = dict()
         self.conf_file = None
         self.commands = CommandBuilder()
-
-        # class IndexMapper(object):
-        #     _indexes = {}
-
-        # self.indexes = IndexMapper()
+        self.indexes = dict()
 
     @property
     def api(self):
@@ -52,16 +47,12 @@ class Engine(object):
     def indexer(self, indexer):
         self._indexer = indexer
 
-    @property
-    def indexes(self):
-        return iter(self._indexes.values())
-
     def add_index(self, index):
-        self._indexes[index.get_index_name] = index
+        self.indexes[index.get_index_name()] = index
 
     def extend_indexes(self, indexes):
-        self._indexes.update({index.get_index_name: index
-                              for index in indexes})
+        self.indexes.update({index.get_index_name(): index
+                             for index in indexes})
 
     def set_conf(self, conf_file):
         self.conf_file = conf_file
@@ -104,7 +95,7 @@ class Engine(object):
     def get_models_dict(self):
         indexes_blocks = {}
 
-        for index in self.indexes:
+        for index in self.indexes.values():
             if is_abstract(index):
                 continue
             index_option_dicts = index.get_option_dicts(self)
