@@ -317,8 +317,8 @@ class BaseTests(unittest.TestCase):
         qs = Query(RakutenProducts, session)
 
         print(qs)
-        print(qs[:2])
         print(qs[2])
+        print(qs[:2])
 
         engine.add_index(self.named_index)
         qs = engine.indexes['another_index']
