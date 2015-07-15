@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, absolute_import
 
-from six import string_types
+import os
 
+from six import string_types
 from os.path import join
 
 from ..query.filters import Range
@@ -10,6 +11,20 @@ from ..utils.cmdtools import (
     cmd_flag, cmd_decorator, check_options, cmd_named_kwarg, cmd_named_arg,
     requires_kwarg
 )
+
+
+class Executable(unicode):
+    """
+    Makes string executable with os execution
+    """
+    def call(self):
+        return os.system(self)
+
+
+def executable(f):
+    def wrapper(*args, **kwds):
+        return Executable(f(*args, **kwds))
+    return wrapper
 
 
 def index_to_str(*index):
@@ -117,26 +132,32 @@ class CommandBuilder(object):
         self.wordbreaker_cmd = join(prefix, 'wordbreaker')
 
     @property
+    @executable
     def search(self):
         return '%s --config %s' % (self.search_cmd, self.config_path)
 
     @property
+    @executable
     def searchd(self):
         return '%s --config %s' % (self.searchd_cmd, self.config_path)
 
     @property
+    @executable
     def indexer(self):
         return '%s --config %s' % (self.indexer_cmd, self.config_path)
 
     @property
+    @executable
     def spelldump(self):
         return '%s --config %s' % (self.spelldump_cmd, self.config_path)
 
     @property
+    @executable
     def indextool(self):
         return '%s --config %s' % (self.indextool_cmd, self.config_path)
 
     @property
+    @executable
     def wordbreaker(self):
         return '%s --config %s' % (self.wordbreaker_cmd, self.config_path)
 
@@ -146,6 +167,7 @@ class CommandBuilder(object):
     def get_conf(self):
         return self.config_path
 
+    @executable
     @indexer_cmd_wrapper
     @cmd_flag('rotate', '--rotate', default=True)
     @cmd_flag('sighup_each', '--sighup-each', default=False)
@@ -169,6 +191,7 @@ class CommandBuilder(object):
 
         return cmd_splitted
 
+    @executable
     @indexer_cmd_wrapper
     @cmd_flag('rotate', '--rotate', default=True)
     @cmd_flag('keep_attrs', '--keep-default=attrs', default=False)
@@ -188,6 +211,7 @@ class CommandBuilder(object):
 
         return cmd_splitted
 
+    @executable
     @indexer_cmd_wrapper
     @cmd_flag('freqs', '--buildfreqs', default=False)
     @requires_kwarg('outputfile')
@@ -211,17 +235,20 @@ class CommandBuilder(object):
         cmd_splitted.append(unicode(int(limit)))
         return cmd_splitted
 
+    @executable
     @server_cmd_wrapper
     @cmd_named_kwarg('pidfile', '--pidfile')
     def status(self):
         return [self.searchd, '--status']
 
+    @executable
     @server_cmd_wrapper
     @cmd_named_kwarg('pidfile', '--pidfile')
     @cmd_flag('block', '--stopwait', default=False)
     def stop(self):
         return [self.searchd, '--stop']
 
+    @executable
     @server_cmd_wrapper
     @cmd_named_kwarg('index', '--index', apply=index_to_str)
     @cmd_named_kwarg('pidfile', '--pidfile')
@@ -248,6 +275,7 @@ class CommandBuilder(object):
     def start(self, **kwargs):
         return [self.searchd, '--start']
 
+    @executable
     @server_cmd_wrapper
     def restart(self, *args, **kwargs):
         pidfile = kwargs.pop('pidfile', None)
@@ -318,10 +346,3 @@ class CommandBuilder(object):
     @cmd_named_arg('index', apply=index_to_str)
     def morph(self):
         return [self.indextool, '--morph']
-
-
-
-
-
-
-
