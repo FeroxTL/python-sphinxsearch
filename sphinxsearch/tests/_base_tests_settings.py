@@ -44,14 +44,14 @@ indexer
 
 source {0}
 {{
-    sql_attr_uint = nazyacategory_id
-    sql_attr_string = orig_name
-    sql_attr_float = orig_price
-    sql_query = SELECT * FROM "base_nazyaproduct"
+    sql_attr_timestamp = modified_at
+    sql_attr_float = post_fee
+    sql_attr_string = thumbs
     sql_attr_bool = in_stock
+    sql_attr_uint = type
     sql_attr_multi = uint property_values_ids from query;
 SELECT "base_nazyaproduct_property_values"."nazyaproduct_id"
-    sql_attr_timestamp = modified_at
+    sql_query = SELECT * FROM "base_nazyaproduct"
 }}
 
 index {0}

@@ -3,7 +3,6 @@ from __future__ import unicode_literals, absolute_import
 
 from collections import OrderedDict
 
-from ..utils import is_abstract
 from .server import SearchServer
 from .indexer import Indexer
 from .commands import CommandBuilder
@@ -98,7 +97,7 @@ class Engine(object):
         indexes_blocks = {}
 
         for index in self.indexes.values():
-            if is_abstract(index):
+            if index._meta.abstract:
                 continue
             index_option_dicts = index.get_option_dicts(self)
             indexes_blocks.update(index_option_dicts)

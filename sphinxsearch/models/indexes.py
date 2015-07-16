@@ -7,37 +7,95 @@ from six import with_metaclass
 from collections import OrderedDict
 
 from .attrs import AbstractAttr
-# from .types import AbstractIndexType
-from ..utils import is_abstract, set_abstract
 
 
 INDEX_NAME_RE = re.compile(ur'^[\w]+$')
 
 
-class IndexBase(object):
-    __abstract__ = True
+class Options(object):
+    """
+    _meta options for class
+    """
+    REQUIRED_OPTIONS = [
+        'abstract',
+        'source',  # database connection
+        'sql_query',
+        'name',  # index name
+        'delta',  # if index is delta
+    ]
+    OPTIONS = [
+        'enable_star',
+        'path',
+        'docinfo',
+        'mlock',
+        'morphology',
+        'min_word_len',
+        'charset_type',
+        'charset_table',
+        'min_infix_len',
+        'query_info',
+    ]
+
+    def __init__(self, cls, index_meta=None, **kwargs):
+        super(Options, self).__init__()
+        OPTIONS = self.REQUIRED_OPTIONS + self.OPTIONS
+        for attr in OPTIONS:
+            default = getattr(index_meta, attr, None)
+            setattr(self, attr, default)
+
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+        self.abstract = self.abstract or False
+        self.delta = self.delta or False
+
+        if not self.abstract:
+            # Checking index name
+            if self.name is None:
+                pattern = '{}_delta' if self.delta else '{}'
+                self.name = pattern.format(cls.get_source_name())
+
+            # Checking required fields
+            for attr in self.REQUIRED_OPTIONS:
+                if getattr(self, attr) is None:
+                    raise Exception(
+                        'Could not create class "{}": "{}" is required'.format(
+                            cls.__name__, attr))
+
+        # TODO: logger
+        if index_meta:
+            for attr in index_meta.__dict__.keys():
+                if attr not in OPTIONS and not attr.startswith('__'):
+                    print(
+                        'Warning! "{}" Meta option in "{}" class'
+                        ' is not supported.'.format(attr, cls.__name__))
 
 
 class IndexMeta(ABCMeta):
-    __indexname__ = None
-
     def __new__(cls, cls_name, cls_parents, cls_dict):
         src_cls = ABCMeta.__new__(cls, cls_name, cls_parents, cls_dict)
 
         if cls_name.split('.')[-1] == 'NewBase':
             return src_cls
 
-        is_abc = cls_dict.pop('__abstract__', False)
+        try:
+            abstract = getattr(cls_dict['Meta'], 'abstract', None)
+        except KeyError:
+            abstract = False
 
-        set_abstract(src_cls, is_abc)
+        src_cls._meta = Options(
+            cls=src_cls,
+            index_meta=getattr(src_cls, 'Meta', None),
+            abstract=abstract)
 
         cls_attr_names = [nm for nm in dir(src_cls) if not nm.startswith('__')]
 
-        cls_dict = dict([(name, getattr(src_cls, name)) for name in
-                         cls_attr_names])
+        cls_dict = OrderedDict([(name, getattr(src_cls, name)) for name in
+                                cls_attr_names])
 
-        if not is_abstract(src_cls):
+        if not src_cls._meta.abstract:
             cls.validate(src_cls)
+
             source_attrs_dict = OrderedDict()
 
             for name, attr in cls_dict.items():
@@ -46,37 +104,25 @@ class IndexMeta(ABCMeta):
 
             src_cls.__attrs__ = source_attrs_dict
 
-        source_name = cls_dict.get('__sourcename__') or\
-            cls.get_source_name(src_cls)
-        src_cls.__sourcename__ = source_name
-
         return src_cls
-
-    @classmethod
-    def get_source_name(cls, index_cls):
-        name = index_cls.__name__
-        module_name = index_cls.__module__.split('.')[-1]
-        return ('%s_%s' % (module_name, name)).lower()
 
     @staticmethod
     def validate(src_cls):
-        # wtf?
-        # assert hasattr(src_cls, '__source__'), src_cls
-        # assert isinstance(src_cls.__source__, AbstractIndexType), src_cls.__source__
-        if src_cls.__indexname__:
-            assert re.match(INDEX_NAME_RE, src_cls.__indexname__)
+        if src_cls._meta.name:
+            assert re.match(INDEX_NAME_RE, src_cls._meta.name)
 
 
-class Index(with_metaclass(IndexMeta, IndexBase)):
-    __delta__ = False
-    __abstract__ = True
+class Index(with_metaclass(IndexMeta, object)):
+    class Meta:
+        abstract = True
+        delta = False
 
     @classmethod
     def get_option_dicts(cls, engine):
-        if is_abstract(cls):
+        if cls._meta.abstract:
             raise NotImplementedError('Cannot get conf for abstract index')
 
-        source_type = cls.__source__.source_type
+        source_type = cls._meta.source.source_type
 
         attr_conf_options = OrderedDict()
 
@@ -84,16 +130,22 @@ class Index(with_metaclass(IndexMeta, IndexBase)):
             key, value = attr.get_option(name, source_type)
             attr_conf_options[key] = value
 
-        return cls.__source__.get_option_dicts(cls, attr_conf_options)
+        return cls._meta.source.get_option_dicts(cls, attr_conf_options)
+
+    @classmethod
+    def get_source_name(cls):
+        name = cls.__name__
+        module_name = cls.__module__.split('.')[-1]
+        return ('%s_%s' % (module_name, name)).lower()
 
     @classmethod
     def get_index_names(cls):
-        names = (cls.__indexname__ or cls.__sourcename__,)
-        if cls.__delta__:
-            delta_index_name = '{}_delta : {}'.format(cls.__sourcename__)
+        names = (cls._meta.name,)
+        if cls._meta.delta:
+            delta_index_name = '{0}_delta : {0}'.format(cls._meta._name)
             names = names + (delta_index_name,)
         return names
 
     @classmethod
     def get_index_name(cls):
-        return cls.__indexname__ or cls.get_index_names()[0]
+        return cls._meta.name

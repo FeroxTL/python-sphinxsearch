@@ -54,7 +54,7 @@ class OptionableBase(object):
         return opt_dict
 
     def get_options(self):
-        return {self.option_block_name: self.get_options_dict()}
+        return OrderedDict([(self.option_block_name, self.get_options_dict())])
 
     def set_option(self, name, value):
         self.user_options[name] = value

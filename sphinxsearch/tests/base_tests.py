@@ -62,27 +62,30 @@ def get_engine(api, server, indexer, models):
 
 
 class AbstractProductsIndex(Index):
-    __abstract__ = True
-    __source__ = PgsqlSource(host=HOST,
+    class Meta:
+        abstract = True
+        source = PgsqlSource(host=HOST,
                              port=5432, db='nazya_db',
                              user='nazya', password='pass')
+        sql_query = 'SELECT * FROM "base_nazyaproduct"'
+        enable_star = True
+        path = '/var/www/nazya/nazya/var/sphinx/index_data/data_anyshop_products'
+        docinfo = 'extern'
+        mlock = 0
+        morphology = 'stem_enru'
+        min_word_len = 2
 
-    path = '/var/www/nazya/nazya/var/sphinx/index_data/data_anyshop_products'
-    docinfo = 'extern'
-    mlock = 0
-    morphology = 'stem_enru'
-    min_word_len = 2
-
-    charset_type = 'utf-8'
-    charset_table = ('0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, '
-                     'U+430..U+44F')
-    min_infix_len = 2
-    enable_star = 1
-    query_info = 'SELECT * FROM "base_nazyaproduct" WHERE id=$id'
+        charset_type = 'utf-8'
+        charset_table = ('0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, '
+                         'U+430..U+44F')
+        min_infix_len = 2
+        enable_star = 1
+        query_info = 'SELECT * FROM "base_nazyaproduct" WHERE id=$id'
 
 
 class AnyshopProducts(AbstractProductsIndex):
-    __abstract__ = True
+    class Meta(AbstractProductsIndex.Meta):
+        abstract = True
 
     nazyacategory_id = Int()
     type = Int()
@@ -123,10 +126,8 @@ class BaseTests(unittest.TestCase):
     maxDiff = None
 
     def setUp(self):
-        import sphinxapi
-
         self.server = get_server()
-        self.api = sphinxapi
+        self.api = __import__('sphinxapi')
         self.indexer = get_indexer()
 
     @property
@@ -147,7 +148,9 @@ class BaseTests(unittest.TestCase):
     @property
     def named_index(self):
         class AnotherIndexProducts(RakutenProducts):
-            __indexname__ = 'another_index'
+            class Meta(RakutenProducts.Meta):
+                name = 'another_index'
+                abstract = False
 
         return AnotherIndexProducts
 
@@ -160,8 +163,14 @@ class BaseTests(unittest.TestCase):
 
     def test_index_name(self):
         self.assertEqual(
-            (RakutenProducts.__sourcename__,),
+            (RakutenProducts.get_index_name(),),
             RakutenProducts.get_index_names())
+
+        self.assertEqual(
+            '{}_{}'.format(__name__.split('.')[-1],
+                        RakutenProducts.__name__.lower()),
+            RakutenProducts._meta.name,
+        )
 
     def test_server_start(self):
         engine = self.local_engine
@@ -189,7 +198,7 @@ class BaseTests(unittest.TestCase):
         self.assertEqual(
             engine.commands.start(index=RakutenProducts),
             'searchd --config sphinx.conf --start --index '
-            '{}'.format(RakutenProducts.__sourcename__))
+            '{}'.format(RakutenProducts.get_index_name()))
 
         self.assertEqual(
             engine.commands.start(index='main'),
@@ -254,7 +263,7 @@ class BaseTests(unittest.TestCase):
         self.assertEqual(
             engine.commands.reindex(RakutenProducts),
             'indexer --config sphinx.conf {} --rotate'.format(
-                RakutenProducts.__sourcename__))
+                RakutenProducts.get_index_name()))
 
         self.assertEqual(
             engine.commands.reindex(all=True, sighup_each=True),
@@ -267,7 +276,7 @@ class BaseTests(unittest.TestCase):
                                        limit=100),
             'indexer --config sphinx.conf {} '
             '--buildstops /tmp/stops.txt 100'.format(
-                RakutenProducts.__sourcename__))
+                RakutenProducts.get_index_name()))
 
         self.assertEqual(
             engine.commands.buildstops(RakutenProducts,
@@ -276,7 +285,7 @@ class BaseTests(unittest.TestCase):
                                        freqs=True),
             'indexer --config sphinx.conf {} '
             '--buildstops /tmp/stops.txt 100 --buildfreqs'.format(
-                RakutenProducts.__sourcename__)
+                RakutenProducts.get_index_name())
             )
 
     def test_indexer_merge(self):
@@ -286,7 +295,7 @@ class BaseTests(unittest.TestCase):
             engine.commands.merge(RakutenProducts, deleted=0),
             'indexer --config sphinx.conf --merge '
             '{} --merge-dst-range deleted 0 0 '
-            '--rotate'.format(RakutenProducts.__sourcename__))
+            '--rotate'.format(RakutenProducts.get_index_name()))
 
     def test_conf(self):
         engine = self.local_engine
@@ -308,7 +317,7 @@ class BaseTests(unittest.TestCase):
                                        freqs=True),
             'indexer --config sphinx.conf {} '
             'arena_products --buildstops tmp/bar.txt 1000 '
-            '--buildfreqs'.format(RakutenProducts.__sourcename__))
+            '--buildfreqs'.format(RakutenProducts.get_index_name()))
 
     def test_session(self):
         engine = self.engine
@@ -329,7 +338,7 @@ class BaseTests(unittest.TestCase):
 
     def test_engine_index_with_name(self):
         """
-        Index with __indexname__ config creation
+        Index with index name config creation
         """
         engine = self.engine
         Index = self.named_index
@@ -343,7 +352,9 @@ class BaseTests(unittest.TestCase):
 
         with self.assertRaises(AssertionError):
             class AnotherIndexProducts(RakutenProducts):
-                __indexname__ = 'another index'
+                class Meta(RakutenProducts.Meta):
+                    name = 'another index'
+                    abstract = False
 
     def test_engine_indexes(self):
         """
