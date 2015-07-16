@@ -1,4 +1,4 @@
 # -*- coding: utf-8 -*-
-from .sources import *
+from .indexes import *
 from .attrs import *
 from .types import *
