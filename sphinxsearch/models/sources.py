@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import re
 from abc import ABCMeta
 from six import with_metaclass
+from collections import OrderedDict
 
 from .attrs import AbstractAttr
 # from .types import AbstractIndexType
@@ -37,7 +38,7 @@ class IndexMeta(ABCMeta):
 
         if not is_abstract(src_cls):
             cls.validate(src_cls)
-            source_attrs_dict = {}
+            source_attrs_dict = OrderedDict()
 
             for name, attr in cls_dict.items():
                 if isinstance(attr, AbstractAttr):
@@ -77,7 +78,7 @@ class Index(with_metaclass(IndexMeta, IndexBase)):
 
         source_type = cls.__source__.source_type
 
-        attr_conf_options = {}
+        attr_conf_options = OrderedDict()
 
         for name, attr in cls.__attrs__.items():
             key, value = attr.get_option(name, source_type)

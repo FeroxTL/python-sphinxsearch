@@ -12,7 +12,7 @@ from .const import (
 
 __all__ = [
     'Int', 'BigInt', 'Bool', 'Float', 'TimeStamp', 'String', 'StringOrd',
-    'WordCount', 'MVA',
+    'WordCount', 'MVA', 'SimpleString',
 ]
 
 
@@ -130,3 +130,17 @@ class MVA(AbstractAttr):
             return self.get_rt_option(attr_name)
         else:
             raise RuntimeError('Unknown source_type: %s' % source_type)
+
+
+class SimpleString(AbstractAttr):
+    """
+    Simple sql output, for example sql_query option:
+
+    sql_query = SimpleString('SELECT * FROM example_table;')
+    """
+    def __init__(self, query):
+        super(SimpleString, self).__init__()
+        self._query = query
+
+    def get_option(self, attr_name, source_type):
+        return attr_name, self._query

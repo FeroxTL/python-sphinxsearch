@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+from collections import OrderedDict
+
 
 class ConfAttrProperty(object):
     def __init__(self, name):
@@ -35,10 +37,10 @@ class OptionableMeta(type):
 
 class OptionableBase(object):
     def __init__(self):
-        self.user_options = {}
+        self.user_options = OrderedDict()
 
     def get_options_dict(self):
-        opt_dict = {}
+        opt_dict = OrderedDict()
 
         meta_options_names = self.__class__.OPTIONS
         for opt_name in meta_options_names:

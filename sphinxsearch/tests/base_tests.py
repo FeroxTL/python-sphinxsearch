@@ -6,11 +6,12 @@ import unittest
 from tempfile import gettempdir
 from os.path import join
 
+from sphinxsearch import SearchServer
 from sphinxsearch.models import (
-    Index, Int, String, Bool, TimeStamp, MVA, Float, PgsqlSource
+    Index, Int, String, Bool, TimeStamp, MVA, Float, PgsqlSource, SimpleString
 )
 from sphinxsearch.tests._base_tests_settings import (
-    TEST_ENGINE_SCHEMA_SETTINGS_LIST, TEST_ENGINE_SETTINGS
+    TEST_ENGINE_SETTINGS, TEST_ENGINE_SCHEMA_SETTINGS
 )
 
 
@@ -31,8 +32,6 @@ def get_indexer():
 
 
 def get_server():
-    from sphinxsearch import SearchServer
-
     my_server = SearchServer(host=HOST, port=PORT)
 
     my_server.read_timeout = 5
@@ -112,6 +111,8 @@ class AnyshopProducts(AbstractProductsIndex):
     property_values_ids = MVA(
         Int,
         query='SELECT "base_nazyaproduct_property_values"."nazyaproduct_id"')
+
+    sql_query = SimpleString('SELECT * FROM "base_nazyaproduct"')
 
 
 class RakutenProducts(AnyshopProducts):
@@ -290,9 +291,9 @@ class BaseTests(unittest.TestCase):
     def test_conf(self):
         engine = self.local_engine
 
-        self.assertEqual(
-            engine.create_config(),
-            TEST_ENGINE_SETTINGS)
+        self.assertMultiLineEqual(
+            TEST_ENGINE_SETTINGS,
+            engine.create_config())
 
         engine.save()
 
@@ -335,11 +336,10 @@ class BaseTests(unittest.TestCase):
 
         engine.add_index(Index)
         config = engine.create_config()
-        parts = [part.format(Index.get_index_name())
-                 for part in TEST_ENGINE_SCHEMA_SETTINGS_LIST]
 
-        for part in parts:
-            self.assertTrue(part in config, part)
+        self.assertMultiLineEqual(
+            TEST_ENGINE_SCHEMA_SETTINGS.format(Index.get_index_name()),
+            config)
 
         with self.assertRaises(AssertionError):
             class AnotherIndexProducts(RakutenProducts):
@@ -350,13 +350,12 @@ class BaseTests(unittest.TestCase):
         Index config creation
         """
         engine = self.engine_with_schema
-
         config = engine.create_config()
-        parts = [part.format(RakutenProducts.get_index_name())
-                 for part in TEST_ENGINE_SCHEMA_SETTINGS_LIST]
 
-        for part in parts:
-            self.assertTrue(part in config, part)
+        self.assertMultiLineEqual(
+            TEST_ENGINE_SCHEMA_SETTINGS.format(
+                RakutenProducts.get_index_name()),
+            config)
 
 
 if __name__ == '__main__':

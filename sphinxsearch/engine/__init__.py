@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, absolute_import
 
+from collections import OrderedDict
+
 from ..utils import is_abstract
 from .server import SearchServer
 from .indexer import Indexer
@@ -62,7 +64,7 @@ class Engine(object):
         return self.conf_file
 
     def create_config(self):
-        blocks_dict = dict(
+        blocks_dict = OrderedDict(
             self.server.get_options().items() +
             self.indexer.get_options().items() +
             self.get_models_dict().items()
