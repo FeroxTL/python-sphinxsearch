@@ -44,6 +44,16 @@ indexer
 
 source {0}
 {{
+    sql_query = SELECT * FROM "base_nazyaproduct"
+    enable_star = 1
+    path = /var/www/nazya/nazya/var/sphinx/index_data/data_anyshop_products
+    docinfo = extern
+    morphology = stem_enru
+    min_word_len = 2
+    charset_type = utf-8
+    charset_table = 0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F
+    min_infix_len = 2
+    query_info = SELECT * FROM "base_nazyaproduct" WHERE id=$id
     sql_attr_timestamp = modified_at
     sql_attr_float = post_fee
     sql_attr_string = thumbs
@@ -51,7 +61,6 @@ source {0}
     sql_attr_uint = type
     sql_attr_multi = uint property_values_ids from query;
 SELECT "base_nazyaproduct_property_values"."nazyaproduct_id"
-    sql_query = SELECT * FROM "base_nazyaproduct"
 }}
 
 index {0}

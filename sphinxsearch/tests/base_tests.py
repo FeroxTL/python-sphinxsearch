@@ -8,7 +8,7 @@ from os.path import join
 
 from sphinxsearch import SearchServer
 from sphinxsearch.models import (
-    Index, Int, String, Bool, TimeStamp, MVA, Float, PgsqlSource, SimpleString
+    Index, Int, String, Bool, TimeStamp, MVA, Float, PgsqlSource
 )
 from sphinxsearch.tests._base_tests_settings import (
     TEST_ENGINE_SETTINGS, TEST_ENGINE_SCHEMA_SETTINGS
@@ -115,8 +115,6 @@ class AnyshopProducts(AbstractProductsIndex):
         Int,
         query='SELECT "base_nazyaproduct_property_values"."nazyaproduct_id"')
 
-    sql_query = SimpleString('SELECT * FROM "base_nazyaproduct"')
-
 
 class RakutenProducts(AnyshopProducts):
     pass
@@ -168,7 +166,7 @@ class BaseTests(unittest.TestCase):
 
         self.assertEqual(
             '{}_{}'.format(__name__.split('.')[-1],
-                        RakutenProducts.__name__.lower()),
+                           RakutenProducts.__name__.lower()),
             RakutenProducts._meta.name,
         )
 

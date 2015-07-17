@@ -35,6 +35,13 @@ class Options(object):
         'min_infix_len',
         'query_info',
     ]
+    # This options are ignored in conf output
+    INTERNAL_OPTIONS = [
+        'abstract',
+        'source',
+        'name',
+        'delta',
+    ]
 
     def __init__(self, cls, index_meta=None, **kwargs):
         super(Options, self).__init__()
@@ -70,6 +77,26 @@ class Options(object):
                         'Warning! "{}" Meta option in "{}" class'
                         ' is not supported.'.format(attr, cls.__name__))
 
+    def get_option(self, name):
+        option = getattr(self, name)
+        if option is None:
+            return ''
+        elif option is bool:
+            return int(option)
+        else:
+            return option
+
+    def get_option_dicts(self):
+        result = OrderedDict()
+        for name in self.REQUIRED_OPTIONS + self.OPTIONS:
+            if name in self.INTERNAL_OPTIONS:
+                continue
+
+            option = self.get_option(name)
+            if option:
+                result[name] = option
+        return result
+
 
 class IndexMeta(ABCMeta):
     def __new__(cls, cls_name, cls_parents, cls_dict):
@@ -85,7 +112,7 @@ class IndexMeta(ABCMeta):
 
         src_cls._meta = Options(
             cls=src_cls,
-            index_meta=getattr(src_cls, 'Meta', None),
+            index_meta=cls_dict.get('Meta', getattr(src_cls, 'Meta')),
             abstract=abstract)
 
         cls_attr_names = [nm for nm in dir(src_cls) if not nm.startswith('__')]
@@ -124,7 +151,7 @@ class Index(with_metaclass(IndexMeta, object)):
 
         source_type = cls._meta.source.source_type
 
-        attr_conf_options = OrderedDict()
+        attr_conf_options = cls._meta.get_option_dicts()
 
         for name, attr in cls.__attrs__.items():
             key, value = attr.get_option(name, source_type)
