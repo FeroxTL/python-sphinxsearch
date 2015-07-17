@@ -41,6 +41,7 @@ class Options(object):
         'source',
         'name',
         'delta',
+        'sql_query',
     ]
 
     def __init__(self, cls, index_meta=None, **kwargs):
@@ -88,6 +89,7 @@ class Options(object):
 
     def get_option_dicts(self):
         result = OrderedDict()
+
         for name in self.REQUIRED_OPTIONS + self.OPTIONS:
             if name in self.INTERNAL_OPTIONS:
                 continue
@@ -95,6 +97,7 @@ class Options(object):
             option = self.get_option(name)
             if option:
                 result[name] = option
+
         return result
 
 
@@ -151,13 +154,18 @@ class Index(with_metaclass(IndexMeta, object)):
 
         source_type = cls._meta.source.source_type
 
-        attr_conf_options = cls._meta.get_option_dicts()
+        source_options = cls._meta.source.get_source_options()
+
+        source_options.update(OrderedDict({
+            'sql_query': cls._meta.get_option('sql_query')
+        }))
+        index_options = cls._meta.get_option_dicts()
 
         for name, attr in cls.__attrs__.items():
             key, value = attr.get_option(name, source_type)
-            attr_conf_options[key] = value
+            source_options[key] = value
 
-        return cls._meta.source.get_option_dicts(cls, attr_conf_options)
+        return cls._meta.source.get_option_dicts(cls, source_options, index_options)
 
     @classmethod
     def get_source_name(cls):

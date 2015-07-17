@@ -2,8 +2,8 @@
 from __future__ import unicode_literals, print_function, absolute_import
 
 from six import with_metaclass
-
 from abc import ABCMeta, abstractmethod, abstractproperty
+from collections import OrderedDict
 
 from .const import RT_SOURCE_TYPE, SQL_SOURCE_TYPE, XML_SOURCE_TYPE
 
@@ -41,14 +41,14 @@ class RT(AbstractIndexType):
 
 
 class AbstractSourceType(AbstractIndexType):
-    def get_option_dicts(self, index, attrs_options):
+    def get_option_dicts(self, index, attrs_options, index_options):
         option_dicts = {}
 
         for index_name in index.get_index_names():
             source_name = index_name
             option_dicts['source %s' % source_name] = attrs_options
 
-            index_options = self.get_index_options(index)
+            index_options = index_options
             index_options['source'] = source_name
             option_dicts['index %s' % source_name] = index_options
 
@@ -56,9 +56,6 @@ class AbstractSourceType(AbstractIndexType):
 
     def get_source_options(self, index, attrs_options):
         return attrs_options
-
-    def get_index_options(self, index):
-        return {}
 
 
 class ODBC(AbstractSourceType):
@@ -103,7 +100,7 @@ class BaseDB(AbstractSourceType):
         self.type = type
 
     def get_source_options(self):
-        source_options = {'type': self.type}
+        source_options = OrderedDict({'type': self.type})
         source_type = self.source_type
 
         if self.sock:

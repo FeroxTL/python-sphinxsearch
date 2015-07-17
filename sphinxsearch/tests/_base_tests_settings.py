@@ -44,16 +44,13 @@ indexer
 
 source {0}
 {{
+    type = pgsql
+    sql_host = localhost
+    sql_port = 5432
+    sql_db = nazya_db
+    sql_user = nazya
+    sql_password = pass
     sql_query = SELECT * FROM "base_nazyaproduct"
-    enable_star = 1
-    path = /var/www/nazya/nazya/var/sphinx/index_data/data_anyshop_products
-    docinfo = extern
-    morphology = stem_enru
-    min_word_len = 2
-    charset_type = utf-8
-    charset_table = 0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F
-    min_infix_len = 2
-    query_info = SELECT * FROM "base_nazyaproduct" WHERE id=$id
     sql_attr_timestamp = modified_at
     sql_attr_float = post_fee
     sql_attr_string = thumbs
@@ -65,6 +62,15 @@ SELECT "base_nazyaproduct_property_values"."nazyaproduct_id"
 
 index {0}
 {{
+    enable_star = 1
+    path = /var/www/nazya/nazya/var/sphinx/index_data/data_anyshop_products
+    docinfo = extern
+    morphology = stem_enru
+    min_word_len = 2
+    charset_type = utf-8
+    charset_table = 0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F
+    min_infix_len = 2
+    query_info = SELECT * FROM "base_nazyaproduct" WHERE id=$id
     source = {0}
 }}
 """
