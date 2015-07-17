@@ -113,9 +113,9 @@ class MVA(AbstractAttr):
         if not self.query:
             target = 'field'
         elif RANGE_QUERY_END in self.query and RANGE_QUERY_START in self.query:
-            target = 'ranged-query;\n%s' % self.query
+            target = 'ranged-query; %s' % self.query
         else:
-            target = 'query;\n%s' % self.query
+            target = 'query; %s' % self.query
 
         key = 'sql_attr_multi'
         value = '%s %s from %s' % (self.attr_type_str, attr_name, target)

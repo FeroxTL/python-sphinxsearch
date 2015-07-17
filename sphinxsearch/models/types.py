@@ -111,7 +111,7 @@ class BaseDB(AbstractSourceType):
 
         source_options['%s_db' % source_type] = self.db
         source_options['%s_user' % source_type] = self.user
-        source_options['%s_password' % source_type] = self.password
+        source_options['%s_pass' % source_type] = self.password
 
         return source_options
 

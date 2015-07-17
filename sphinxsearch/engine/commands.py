@@ -266,14 +266,14 @@ class CommandBuilder(object):
     @cmd_flag('delete', '--delete', default=False, conflicts=['nodetach'])
     @cmd_flag('servicename', '--servicename', default=False, conflicts=['nodetach'])
     @cmd_flag('ntservice', '--ntservice', default=False, conflicts=['nodetach'])
-    #linux only option
+    # linux only option
     @cmd_flag('nodetach', '--nodetach', default=False, conflicts=['install',
                                                                   'delete',
                                                                   'servicename',
                                                                   'ntservice'])
     @cmd_loglevel_option
     def start(self, **kwargs):
-        return [self.searchd, '--start']
+        return [self.searchd]
 
     @executable
     @server_cmd_wrapper

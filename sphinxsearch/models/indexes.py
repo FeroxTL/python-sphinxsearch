@@ -24,16 +24,13 @@ class Options(object):
         'delta',  # if index is delta
     ]
     OPTIONS = [
-        'enable_star',
         'path',
         'docinfo',
         'mlock',
         'morphology',
         'min_word_len',
-        'charset_type',
         'charset_table',
         'min_infix_len',
-        'query_info',
     ]
     # This options are ignored in conf output
     INTERNAL_OPTIONS = [
@@ -165,7 +162,8 @@ class Index(with_metaclass(IndexMeta, object)):
             key, value = attr.get_option(name, source_type)
             source_options[key] = value
 
-        return cls._meta.source.get_option_dicts(cls, source_options, index_options)
+        return cls._meta.source.get_option_dicts(cls, source_options,
+                                                 index_options)
 
     @classmethod
     def get_source_name(cls):

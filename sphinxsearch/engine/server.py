@@ -52,7 +52,7 @@ class _SearchServerMeta(OptionableMeta):
 
 
 class SearchServer(with_metaclass(_SearchServerMeta, OptionableBase)):
-    option_block_name = 'server'
+    option_block_name = 'searchd'
 
     def __init__(self, host=None, port=None, listen=None):
         super(SearchServer, self).__init__()

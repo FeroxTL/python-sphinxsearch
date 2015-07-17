@@ -4,7 +4,8 @@ from __future__ import unicode_literals, print_function
 import unittest
 
 from tempfile import gettempdir
-from os.path import join
+from os import unlink
+from os.path import join, exists
 
 from sphinxsearch import SearchServer
 from sphinxsearch.models import (
@@ -17,9 +18,10 @@ from sphinxsearch.tests._base_tests_settings import (
 
 HOST = 'localhost'
 PORT = '4321'
-TMP_ROOT = join(gettempdir())
+SPHINX_ROOT = join(gettempdir(), 'sphinxtest')
 MAX_MATCHES = 10000
-LOG_DIR = join(TMP_ROOT, 'logs')
+LOG_DIR = join(SPHINX_ROOT, 'logs')
+INDEX_DIR = join(SPHINX_ROOT, 'index_data')
 
 
 def get_indexer():
@@ -37,8 +39,8 @@ def get_server():
     my_server.read_timeout = 5
     my_server.client_timeout = 300
     my_server.max_children = 0
-    my_server.pid_file = join(TMP_ROOT, 'searchd.pid')
-    my_server.max_matches = MAX_MATCHES
+    my_server.pid_file = join(SPHINX_ROOT, 'searchd.pid')
+    my_server.max_matches = MAX_MATCHES  # depredcated, TODO delete
     my_server.log = join(LOG_DIR, 'searchd.log')
     my_server.workers = 'prefork'
     my_server.preopen_indexes = True
@@ -68,19 +70,15 @@ class AbstractProductsIndex(Index):
                              port=5432, db='nazya_db',
                              user='nazya', password='pass')
         sql_query = 'SELECT * FROM "base_nazyaproduct"'
-        enable_star = True
-        path = '/var/www/nazya/nazya/var/sphinx/index_data/data_anyshop_products'
+        path = INDEX_DIR
         docinfo = 'extern'
         mlock = 0
         morphology = 'stem_enru'
         min_word_len = 2
 
-        charset_type = 'utf-8'
-        charset_table = ('0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, '
-                         'U+430..U+44F')
+        charset_table = ('0..9, A..Z->a..z, _, a..z, '
+                         'U+410..U+42F->U+430..U+44F, U+430..U+44F')
         min_infix_len = 2
-        enable_star = 1
-        query_info = 'SELECT * FROM "base_nazyaproduct" WHERE id=$id'
 
 
 class AnyshopProducts(AbstractProductsIndex):
@@ -131,7 +129,7 @@ class BaseTests(unittest.TestCase):
     @property
     def engine(self):
         engine = get_engine(self.api, self.server, self.indexer, set())
-        conf_file_path = join(TMP_ROOT, 'sphinx.conf')
+        conf_file_path = join(SPHINX_ROOT, 'sphinx.conf')
         engine.set_conf(conf_file_path)
         return engine
 
@@ -156,8 +154,20 @@ class BaseTests(unittest.TestCase):
     def local_engine(self):
         engine = self.engine
         engine.set_conf('sphinx.conf')
-        engine.save()
         return engine
+
+    def test_engine_conf(self):
+        engine = self.local_engine
+        fname = 'sphinx.conf'
+        engine.set_conf(fname)
+
+        if exists(fname):
+            unlink(fname)
+
+        engine.save()
+        self.assertTrue(exists(fname))
+
+        unlink(fname)
 
     def test_index_name(self):
         self.assertEqual(
@@ -179,13 +189,13 @@ class BaseTests(unittest.TestCase):
 
         self.assertEqual(
             engine.commands.start(),
-            'searchd --config sphinx.conf --start')
+            'searchd --config sphinx.conf')
 
         LOGDEBUGS = [
-            'searchd --config sphinx.conf --start',
-            'searchd --config sphinx.conf --start --logdebug',
-            'searchd --config sphinx.conf --start --logdebugv',
-            'searchd --config sphinx.conf --start --logdebugvv',
+            'searchd --config sphinx.conf',
+            'searchd --config sphinx.conf --logdebug',
+            'searchd --config sphinx.conf --logdebugv',
+            'searchd --config sphinx.conf --logdebugvv',
         ]
 
         for i in range(0, 4):
@@ -195,20 +205,20 @@ class BaseTests(unittest.TestCase):
 
         self.assertEqual(
             engine.commands.start(index=RakutenProducts),
-            'searchd --config sphinx.conf --start --index '
+            'searchd --config sphinx.conf --index '
             '{}'.format(RakutenProducts.get_index_name()))
 
         self.assertEqual(
             engine.commands.start(index='main'),
-            'searchd --config sphinx.conf --start --index main')
+            'searchd --config sphinx.conf --index main')
 
         self.assertEqual(
             engine.commands.start(port=1234),
-            'searchd --config sphinx.conf --start --port 1234')
+            'searchd --config sphinx.conf --port 1234')
 
         self.assertEqual(
             engine.commands.start(listen='localhost:4321:mysql41'),
-            'searchd --config sphinx.conf --start --listen '
+            'searchd --config sphinx.conf --listen '
             'localhost:4321:mysql41')
 
         self.assertRaises(
@@ -238,12 +248,12 @@ class BaseTests(unittest.TestCase):
         self.assertEqual(
             engine.commands.restart(),
             'searchd --config sphinx.conf --stop --stopwait ; searchd '
-            '--config sphinx.conf --start')
+            '--config sphinx.conf')
 
         self.assertEqual(
             engine.commands.restart(pidfile='/tmp/custom.pid'),
             'searchd --config sphinx.conf --stop --stopwait --pidfile '
-            '/tmp/custom.pid ; searchd --config sphinx.conf --start '
+            '/tmp/custom.pid ; searchd --config sphinx.conf '
             '--pidfile /tmp/custom.pid')
 
         self.assertEqual(
@@ -251,7 +261,7 @@ class BaseTests(unittest.TestCase):
                                     new_pidfile='/tmp/custom_new.pid',
                                     logdebug=3),
             'searchd --config sphinx.conf --stop --stopwait --pidfile '
-            '/tmp/custom.pid ; searchd --config sphinx.conf --start '
+            '/tmp/custom.pid ; searchd --config sphinx.conf '
             '--logdebugvv --pidfile /tmp/custom_new.pid'
             )
 
@@ -301,8 +311,6 @@ class BaseTests(unittest.TestCase):
         self.assertMultiLineEqual(
             TEST_ENGINE_SETTINGS,
             engine.create_config())
-
-        engine.save()
 
         engine.set_conf('sphinx.conf')
         self.assertEquals(engine.commands.get_conf(), 'sphinx.conf')
