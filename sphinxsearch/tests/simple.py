@@ -6,9 +6,15 @@ import os
 import shutil
 
 from sphinxsearch.tests.base_tests import (
-    RakutenProducts, get_server, get_indexer, get_engine,
+    get_server, get_indexer, get_engine,
     SPHINX_ROOT, LOG_DIR, INDEX_DIR
 )
+
+
+try:
+    from settings_local import RakutenProducts
+except ImportError:
+    from sphinxsearch.tests.base_tests import RakutenProducts
 
 
 class SimpleTests(unittest.TestCase):
@@ -36,6 +42,15 @@ class SimpleTests(unittest.TestCase):
         engine = self.engine
         engine.add_index(RakutenProducts)
         engine.save()
+
+        # reindex
+        self.assertEqual(engine.commands.reindex(RakutenProducts).call(), 0)
+
+        # start sphinx
+        self.assertEqual(engine.commands.start().call(), 0)
+
+        # stop sphinx
+        self.assertEqual(engine.commands.stop().call(), 0)
 
         # import pdb
         # pdb.set_trace()

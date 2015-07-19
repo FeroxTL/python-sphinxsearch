@@ -163,3 +163,7 @@ class MssqlSource(BaseDB):
 class PgsqlSource(BaseDB):
     def __init__(self, *args, **kwargs):
         super(PgsqlSource, self).__init__('pgsql', *args, **kwargs)
+        if not self.port:
+            self.port = 5432
+        if not self.host:
+            self.host = 'localhost'

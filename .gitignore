@@ -2,6 +2,7 @@
 .tox
 cover
 sphinx.conf
+settings_local.py
 
 syntax: glob
 
