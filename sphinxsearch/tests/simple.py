@@ -49,11 +49,15 @@ class SimpleTests(unittest.TestCase):
         # start sphinx
         self.assertEqual(engine.commands.start().call(), 0)
 
+        from sphinxsearch.query import Query
+
+        session = engine.get_session()
+        qs = Query(RakutenProducts, session)
+
+        print(qs[3:])
+
         # stop sphinx
         self.assertEqual(engine.commands.stop().call(), 0)
-
-        # import pdb
-        # pdb.set_trace()
 
 
 if __name__ == '__main__':

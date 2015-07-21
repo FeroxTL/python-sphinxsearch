@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 import six
-from random import randint
+# from random import randint
+
+from sphinxapi import SphinxClient
 
 
-REPR_OUTPUT_SIZE = 2
+REPR_OUTPUT_SIZE = 5
 
 
 class QueryBackend(object):
@@ -12,6 +14,7 @@ class QueryBackend(object):
         self.filters = {}
         self.offset = 0
         self.limit = 10000
+        self.query = ''
 
     def add_filter(self, attr_name, filter_op):
         self.filters[attr_name] = filter_op
@@ -19,6 +22,9 @@ class QueryBackend(object):
     def set_limits(self, offset, limit):
         self.offset = offset
         self.limit = limit
+
+    def search(self, query):
+        self.query = query
 
 
 def clone_method(method):
@@ -28,26 +34,34 @@ def clone_method(method):
     return wrapper
 
 
-class Query(object):
+class SphinxQuery(object):
     def __init__(self):
-        super(Query, self).__init__()
+        super(SphinxQuery, self).__init__()
         self.query = QueryBackend()
-        self._result_cache = None
+        self._clear_cache()
 
     def _clear_cache(self):
         self._result_cache = None
+        self._total_found = 0
 
     def _populate(self):
         if self._result_cache is None:
-            self._result_cache = [randint(1, 10) for x in range(randint(5, 15))]
+            sphinx = SphinxClient()
+            sphinx.AddQuery(str(self.query.query), 'settings_local_rakutenproducts')
+            sphinx_result = sphinx.RunQueries()
+            self._result_cache = []
+            for index in sphinx_result:
+                self._result_cache += [x for x in index['matches']]
+            self._total_found = sum([a['total_found'] for a in sphinx_result])
 
     @clone_method
-    def filter(self, *args, **kwargs):
-        self.query.add_filter('a', 'b')
+    def filter(self, **kwargs):
+        for k, v in kwargs.items():
+            self.query.add_filter(k, v)
 
     def __len__(self, *args, **kwargs):
         self._populate()
-        return len(self._result_cache)
+        return self._total_found
 
     def __repr__(self):
         data = list(self[:REPR_OUTPUT_SIZE + 1])
@@ -87,15 +101,16 @@ class Query(object):
 
 
 if __name__ == '__main__':
-    q = Query()
-    print(len(q))
+    q = SphinxQuery()
     print(q.filter())
-    print(len(q))
+    print(len(q.filter()))
+    # print(q.filter())
+    # print(len(q))
 
-    print('---------')
+    # print('---------')
 
-    q = q.filter()
-    print(list(q))
-    print(q)
-    print(len(q))
-    print(q[2])
+    # q = q.filter()
+    # print(list(q))
+    # print(q)
+    # print(len(q))
+    # print(q[2])

@@ -25,6 +25,7 @@ class Session(object):
         sphinx = self.api.SphinxClient()
         sphinx._host = self.host
         sphinx._port = int(self.port)
+        print(sphinx._port)
 
         sphinx.SetLimits(query.offset or 0, query.limit or 100,
                          query.max_matches or 10000, query.cutoff or 0)
