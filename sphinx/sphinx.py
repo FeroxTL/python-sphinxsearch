@@ -1,25 +1,31 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 
 import select
 import socket
 from struct import pack, unpack
+from re import sub
 
 from . import const
 
 
 def clone_method(method):
     def wrapper(self, *args, **kwargs):
+        method(self, *args, **kwargs)
         return self
     return wrapper
+
+
+def escape(self, string):
+    return sub(r"([=\(\)|\-!@~\"&/\\\^\$\=])", r"\\\1", string)
 
 
 class SphinxClient(object):
     def __init__(self, host='localhost', port=9312, path=None, timeout=1.0):
         self._host = host
         self._port = port
-        self._socket = None
         self._path = path
+        self._socket = None
         self._timeout = timeout
         self._offset = 0
         self._limit = 100
@@ -31,6 +37,20 @@ class SphinxClient(object):
 
     def __del__(self):
         self._disconnect()
+
+    def _reset(self):
+        self._overrides = {}
+        self._filters = []
+        self._anchor = {}
+        self._groupby = ''
+        self._groupfunc = const.SPH_GROUPBY_DAY
+        self._groupsort = '@group desc'
+        self._groupdistinct = ''
+        self._ranker = const.SPH_RANK_PROXIMITY_BM25
+        self._sort = const.SPH_SORT_RELEVANCE
+        self._sortby = ''
+        self._select = '*'
+        self._reqs = []
 
     def _disconnect(self):
         if self._socket:
@@ -61,13 +81,13 @@ class SphinxClient(object):
             sock = socket.socket(af, socket.SOCK_STREAM)
             sock.settimeout(self._timeout)
             sock.connect(addr)
-        except socket.error, msg:
+        except socket.error as e:
             if sock:
                 sock.close()
-            raise RuntimeError('connection to %s failed (%s)' % (desc, msg))
+            raise RuntimeError('connection to %s failed (%s)' % (desc, e))
 
         v = unpack('>L', sock.recv(4))
-        if v < 1:
+        if v < (1,):
             sock.close()
             raise RuntimeError('expected searchd protocol version, got %s' % v)
 
@@ -86,14 +106,252 @@ class SphinxClient(object):
 
         return total
 
-    def _reset(self):
-        self._overrides = {}
-        self._filters = []
-        self._anchor = {}
-        self._groupby = ''
-        self._groupfunc = const.SPH_GROUPBY_DAY
-        self._groupsort = '@group desc'
-        self._groupdistinct = ''
+    def _get_response(self, sock, client_ver):
+        (status, ver, length) = unpack('>2HL', sock.recv(8))
+        response = ''
+        left = length
+        while left > 0:
+            chunk = sock.recv(left)
+            if chunk:
+                response += chunk.decode('utf-8')
+                left -= len(chunk)
+            else:
+                break
+
+        if not self._socket:
+            sock.close()
+
+        # check response
+        read = len(response)
+        if not response or read != length:
+            if length:
+                raise Exception(
+                    'failed to read searchd response (status=%s, ver=%s, '
+                    'len=%s, read=%s)' % (status, ver, length, read))
+            else:
+                raise Exception('received zero-sized searchd response')
+            return None
+
+        # check status
+        if status == const.SEARCHD_WARNING:
+            wend = 4 + unpack('>L', response[0:4])[0]
+            self._warning = response[4:wend]
+            return response[wend:]
+
+        if status == const.SEARCHD_ERROR:
+            raise Exception('searchd error: ' + response[4:])
+
+        if status == const.SEARCHD_RETRY:
+            raise Exception('temporary searchd error: ' + response[4:])
+
+        if status != const.SEARCHD_OK:
+            raise Exception('unknown status code %d' % status)
+
+        # check version
+        if ver < client_ver:
+            # TODO: logger
+            raise Exception(
+                'searchd command v.%d.%d older than client\'s v.%d.%d, '
+                'some options might not work' % (
+                    ver >> 8,
+                    ver & 0xff,
+                    client_ver >> 8,
+                    client_ver & 0xff
+                ))
+
+        return response
+
+    def _populate(self):
+        if len(self._reqs) == 0:
+            return None
+
+        sock = self._connect()
+        if not sock:
+            return None
+
+        req = ''.join(self._reqs)
+        length = len(req) + 8
+
+        req = pack('>HHLLL', const.SEARCHD_COMMAND_SEARCH,
+                   const.VER_COMMAND_SEARCH, length, 0, len(self._reqs)) + req
+        self._send(sock, req)
+
+        response = self._get_response(sock, const.VER_COMMAND_SEARCH)
+        if not response:
+            return None
+
+        nreqs = len(self._reqs)
+        max_ = len(response)
+        p = 0
+
+        results = []
+        for i in range(0, nreqs):
+            result = {}
+            results.append(result)
+
+            result['error'] = ''
+            result['warning'] = ''
+            status = unpack('>L', response[p:p+4])[0]
+            p += 4
+            result['status'] = status
+            if status != const.SEARCHD_OK:
+                length = unpack('>L', response[p:p+4])[0]
+                p += 4
+                message = response[p:p+length]
+                p += length
+
+                if status == const.SEARCHD_WARNING:
+                    result['warning'] = message
+                else:
+                    result['error'] = message
+                    continue
+
+            # read schema
+            fields = []
+            attrs = []
+
+            nfields = unpack('>L', response[p:p+4])[0]
+            p += 4
+            while nfields > 0 and p < max_:
+                nfields -= 1
+                length = unpack('>L', response[p:p+4])[0]
+                p += 4
+                fields.append(response[p:p+length])
+                p += length
+
+            result['fields'] = fields
+
+            nattrs = unpack('>L', response[p:p+4])[0]
+            p += 4
+            while nattrs > 0 and p < max_:
+                nattrs -= 1
+                length = unpack('>L', response[p:p+4])[0]
+                p += 4
+                attr = response[p:p+length]
+                p += length
+                type_ = unpack('>L', response[p:p+4])[0]
+                p += 4
+                attrs.append([attr, type_])
+
+            result['attrs'] = attrs
+
+            # read match count
+            count = unpack('>L', response[p:p+4])[0]
+            p += 4
+            id64 = unpack('>L', response[p:p+4])[0]
+            p += 4
+
+            # read matches
+            result['matches'] = []
+            while count > 0 and p < max_:
+                count -= 1
+                if id64:
+                    doc, weight = unpack('>QL', response[p:p+12])
+                    p += 12
+                else:
+                    doc, weight = unpack('>2L', response[p:p+8])
+                    p += 8
+
+                match = {'id': doc, 'weight': weight, 'attrs': {}}
+                for i in range(len(attrs)):
+                    if attrs[i][1] == const.SPH_ATTR_FLOAT:
+                        match['attrs'][attrs[i][0]] = unpack('>f', response[p:p+4])[0]
+                    elif attrs[i][1] == const.SPH_ATTR_BIGINT:
+                        match['attrs'][attrs[i][0]] = unpack('>q', response[p:p+8])[0]
+                        p += 4
+                    elif attrs[i][1] == const.SPH_ATTR_STRING:
+                        slen = unpack('>L', response[p:p+4])[0]
+                        p += 4
+                        match['attrs'][attrs[i][0]] = ''
+                        if slen>0:
+                            match['attrs'][attrs[i][0]] = response[p:p+slen]
+                        p += slen-4
+                    elif attrs[i][1] == const.SPH_ATTR_MULTI:
+                        match['attrs'][attrs[i][0]] = []
+                        nvals = unpack('>L', response[p:p+4])[0]
+                        p += 4
+                        for n in range(0,nvals,1):
+                            match['attrs'][attrs[i][0]].append(unpack('>L', response[p:p+4])[0])
+                            p += 4
+                        p -= 4
+                    elif attrs[i][1] == const.SPH_ATTR_MULTI64:
+                        match['attrs'][attrs[i][0]] = []
+                        nvals = unpack('>L', response[p:p+4])[0]
+                        nvals = nvals/2
+                        p += 4
+                        for n in range(0, nvals):
+                            match['attrs'][attrs[i][0]].append(unpack('>q', response[p:p+8])[0])
+                            p += 8
+                        p -= 4
+                    else:
+                        match['attrs'][attrs[i][0]] = unpack('>L', response[p:p+4])[0]
+                    p += 4
+
+                result['matches'].append(match)
+
+            result['total'], result['total_found'], result['time'], words = unpack('>4L', response[p:p+16])
+
+            result['time'] = '%.3f' % (result['time']/1000.0)
+            p += 16
+
+            result['words'] = []
+            while words > 0:
+                words -= 1
+                length = unpack('>L', response[p:p+4])[0]
+                p += 4
+                word = response[p:p+length]
+                p += length
+                docs, hits = unpack('>2L', response[p:p+8])
+                p += 8
+
+                result['words'].append({'word': word, 'docs': docs, 'hits': hits})
+
+        self._reqs = []
+        return results
+
+    @clone_method
+    def query(self, query='', index='*'):
+        req = []
+        req.append(pack('>4L', self._offset, self._limit, self._mode, self._ranker))
+        if self._ranker == const.SPH_RANK_EXPR:
+            req.append(pack('>L', len(self._rankexpr)))
+            req.append(self._rankexpr)
+        req.append(pack('>L', self._sort))
+        req.append(pack('>L', len(self._sortby)))
+        req.append(self._sortby)
+
+        self._reqs.append(req)
+
+    def status(self):
+        # connect, send query, get response
+        sock = self._connect()
+        if not sock:
+            return None
+
+        req = pack('>2HLL', const.SEARCHD_COMMAND_STATUS,
+                   const.VER_COMMAND_STATUS, 4, 1)
+        self._send(sock, req)
+
+        response = self._get_response(sock, const.VER_COMMAND_STATUS)
+        if not response:
+            return None
+
+        # parse response
+        res = {}
+
+        p = 8
+        response_len = len(response)
+
+        while p < response_len:
+            length = unpack('>L', response[p:p+4].encode('utf-8'))[0]
+            k = response[p+4:p+length+4]
+            p += 4+length
+            length = unpack('>L', response[p:p+4].encode('utf-8'))[0]
+            v = response[p+4:p+length+4]
+            p += 4+length
+            res[k] = v
+
+        return res
 
     @clone_method
     def set_limits(self, offset, limit=None, maxmatches=None, cutoff=None):
@@ -153,11 +411,13 @@ class SphinxClient(object):
 
     @clone_method
     def extra(self, select=None):
-        pass
+        if select:
+            self._select = select
 
 
 if __name__ == '__main__':
     cl = SphinxClient()
-    cl._connect()
-    cl.set_limits(5).filter().extra().weights()
+    print(cl.set_limits(5).query()._populate())
+    # from pprint import pprint
+    # pprint(cl.status())
     print('OK')
