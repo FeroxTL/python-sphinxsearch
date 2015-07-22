@@ -3,7 +3,7 @@ from __future__ import absolute_import, unicode_literals
 
 import select
 import socket
-from six import string_types, integer_types
+from six import string_types, integer_types, iteritems
 from struct import pack, unpack, unpack_from, calcsize
 from re import sub
 
@@ -20,7 +20,7 @@ def clone_method(method):
     return wrapper
 
 
-def escape(self, string):
+def escape(string):
     return sub(r"([=\(\)|\-!@~\"&/\\\^\$\=])", r"\\\1", string)
 
 
@@ -30,7 +30,10 @@ def format_req(val, fmt='>L'):
     if isinstance(val, string_types):
         val = val.encode('utf-8')
         return pack(fmt, len(val)) + val
-    # if isinstance(val, (dict)):
+    if isinstance(val, (dict)):
+        return format_req(len(val)) + b''.join([
+            format_req(key) + format_req(value)
+            for key, value in iteritems(val)])
     raise Exception('Unknown val format')
 
 
@@ -334,8 +337,7 @@ class SphinxClient(object):
         self._reqs = []
         return results
 
-    @clone_method
-    def query(self, query='', index='*', comment=''):
+    def __query_base(self):
         req = []
 
         req.append(pack('>4L', self._offset, self._limit, self._mode,
@@ -344,26 +346,34 @@ class SphinxClient(object):
             req.append(format_req(len(self._rankexpr)))
             req.append(format_req(self._rankexpr))
 
-        req.append(format_req(self._sort))
-        req.append(format_req(self._sortby))
+        return b''.join(req)
 
-        req.append(format_req(query))
+    def __query_sort(self):
+        return format_req(self._sort) + format_req(self._sortby)
 
-        # DEPRECATED
+    def __query_query(self, query):
+        return format_req(escape(query))
+
+    def __query_weights(self):
+        """DEPRECATED"""
         # req.append(pack('>L', len(self._weights)))
         # for w in self._weights:
         #     req.append(pack('>L', w))
-        req.append(pack('>L', 0))
+        return pack('>L', 0)
 
+    def __query_index(self, index):
         try:
-            req.append(format_req(index))
+            return format_req(index)
         except UnicodeDecodeError:
             raise RuntimeError('Index must be string')
 
-        req.append(pack('>L', 1))  # id64 range marker
-        req.append(pack('>2Q', self._min_id, self._max_id))
+    def __query_id_range(self):
+        # >L is id64 range marker
+        return pack('>L2Q', 1, self._min_id, self._max_id)
 
-        # filters
+    def __query_filters(self):
+        req = []
+
         req.append(format_req(len(self._filters)))
         for f in self._filters:
             req.append(pack('>L', len(f['attr'])) + f['attr'])
@@ -379,43 +389,41 @@ class SphinxClient(object):
                 req.append(pack('>2f', f['min'], f['max']))
             req.append(pack('>L', f['exclude']))
 
-        # group-by, max-matches, group-sort
+        return b''.join(req)
+
+    def __query_other(self):
+        req = []
         req.append(pack('>L', self._groupfunc))
         req.append(format_req(self._groupby))
         req.append(pack('>L', self._maxmatches))
         req.append(format_req(self._groupsort))
-        req.append(pack('>3L', self._cutoff, self._retrycount, self._retrydelay))
+        req.append(pack('>3L', self._cutoff, self._retrycount,
+                        self._retrydelay))
         req.append(format_req(self._groupdistinct))
+        return b''.join(req)
 
-        # anchor point
+    def __query_anchor(self):
+        """
+        Anchor point
+        """
         if len(self._anchor) == 0:
-            req.append(pack('>L', 0))
+            return format_req(0)
         else:
             attrlat, attrlong = self._anchor['attrlat'], self._anchor['attrlong']
             latitude, longitude = self._anchor['lat'], self._anchor['long']
+            # TODO: fix
+            req = []
             req.append(pack('>L', 1))
             req.append(pack('>L', len(attrlat)) + attrlat)
             req.append(pack('>L', len(attrlong)) + attrlong)
             req.append(pack('>f', latitude) + pack('>f', longitude))
+            return b''.join(req)
 
-        # per-index weights
-        req.append(format_req(len(self._indexweights)))
-        for indx, weight in self._indexweights.items():
-            req.append(format_req(indx))
-            req.append(format_req(weight))
-
-        # max query time
-        req.append(format_req(self._maxquerytime))
-
-        # per-field weights
-        req.append(format_req(len(self._fieldweights)))
-        for field, weight in self._fieldweights.items():
-            req.append(pack('>L', len(field)) + field + pack('>L', weight))
-
-        # comment
-        req.append(format_req(comment))
-
-        # attribute overrides
+    def __query_overrides(self):
+        """
+        Attribute overrides
+        """
+        req = []
         req.append(pack('>L', len(self._overrides)))
         for v in self._overrides.values():
             req.extend((pack('>L', len(v['name'])), v['name']))
@@ -429,8 +437,27 @@ class SphinxClient(object):
                 else:
                     req.append(pack('>l', value))
 
-        # select-list
-        req.append(format_req(self._select))
+        return b''.join(req)
+
+    @clone_method
+    def query(self, query='', index='*', comment=''):
+        req = [
+            self.__query_base(),
+            self.__query_sort(),
+            self.__query_query(query),
+            self.__query_weights(),
+            self.__query_index(index),
+            self.__query_id_range(),
+            self.__query_filters(),
+            self.__query_other(),
+            self.__query_anchor(),
+            format_req(self._indexweights),  # per-index weights
+            format_req(self._maxquerytime),  # max query time
+            format_req(self._fieldweights),  # per-field weights
+            format_req(comment),
+            self.__query_overrides(),
+            format_req(self._select),  # select-list
+        ]
 
         self._reqs.append(b''.join(req))
 
