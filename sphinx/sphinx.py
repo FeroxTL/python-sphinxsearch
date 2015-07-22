@@ -33,6 +33,9 @@ class SphinxClient(object):
         self._mode = const.SPH_MATCH_ALL
         self._fieldweights = {}
         self._indexweights = {}
+        self._retrycount = 0
+        self._retrydelay = 0
+        self._maxquerytime = 0
         self._reset()
 
     def __del__(self):
@@ -51,6 +54,9 @@ class SphinxClient(object):
         self._sortby = ''
         self._select = '*'
         self._reqs = []
+        self._min_id = 0
+        self._max_id = 0
+        self._cutoff = 0
 
     def _disconnect(self):
         if self._socket:
@@ -161,24 +167,19 @@ class SphinxClient(object):
 
         return response
 
-    def _populate(self):
-        if len(self._reqs) == 0:
-            return None
-
+    def __populate_results(self):
         sock = self._connect()
-        if not sock:
-            return None
 
-        req = ''.join(self._reqs)
+        req = b''.join(self._reqs)
         length = len(req) + 8
 
-        req = pack('>HHLLL', const.SEARCHD_COMMAND_SEARCH,
-                   const.VER_COMMAND_SEARCH, length, 0, len(self._reqs)) + req
-        self._send(sock, req)
+        self._send(sock, pack('>HHLLL', const.SEARCHD_COMMAND_SEARCH,
+                   const.VER_COMMAND_SEARCH, length, 0, len(self._reqs)) + req)
 
-        response = self._get_response(sock, const.VER_COMMAND_SEARCH)
-        if not response:
-            return None
+        return self._get_response(sock, const.VER_COMMAND_SEARCH)
+
+    def _populate(self):
+        response = self.__populate_results()
 
         nreqs = len(self._reqs)
         max_ = len(response)
@@ -312,15 +313,119 @@ class SphinxClient(object):
     @clone_method
     def query(self, query='', index='*'):
         req = []
+
         req.append(pack('>4L', self._offset, self._limit, self._mode, self._ranker))
         if self._ranker == const.SPH_RANK_EXPR:
             req.append(pack('>L', len(self._rankexpr)))
             req.append(self._rankexpr)
         req.append(pack('>L', self._sort))
         req.append(pack('>L', len(self._sortby)))
-        req.append(self._sortby)
+        req.append(self._sortby.encode('utf-8'))
 
-        self._reqs.append(req)
+        req.append(pack('>L', len(query.encode('utf-8'))))
+        req.append(query.encode('utf-8'))
+
+        # DEPRECATED
+        # req.append(pack('>L', len(self._weights)))
+        # for w in self._weights:
+        #     req.append(pack('>L', w))
+        req.append(pack('>L', 0))
+
+        try:
+            req.append(pack('>L', len(index)))
+            req.append(index.encode('utf-8'))
+        except UnicodeDecodeError:
+            raise RuntimeError('Index must be string')
+
+        req.append(pack('>L', 1))  # id64 range marker
+        req.append(pack('>Q', self._min_id))
+        req.append(pack('>Q', self._max_id))
+
+        # filters
+        req.append(pack('>L', len(self._filters)))
+        for f in self._filters:
+            req.append(pack('>L', len(f['attr'])) + f['attr'])
+            filtertype = f['type']
+            req.append(pack('>L', filtertype))
+            if filtertype == const.SPH_FILTER_VALUES:
+                req.append(pack('>L', len(f['values'])))
+                for val in f['values']:
+                    req.append(pack('>q', val))
+            elif filtertype == const.SPH_FILTER_RANGE:
+                req.append(pack('>2q', f['min'], f['max']))
+            elif filtertype == const.SPH_FILTER_FLOATRANGE:
+                req.append(pack('>2f', f['min'], f['max']))
+            req.append(pack('>L', f['exclude']))
+
+        # group-by, max-matches, group-sort
+        req.append(pack('>2L', self._groupfunc, len(self._groupby)))
+        req.append(self._groupby.encode('utf-8'))
+        req.append(pack('>2L', self._maxmatches, len(self._groupsort)))
+        req.append(self._groupsort.encode('utf-8'))
+        req.append(pack('>3L', self._cutoff, self._retrycount, self._retrydelay))
+        req.append(pack('>L', len(self._groupdistinct)))
+        req.append(self._groupdistinct.encode('utf-8'))
+
+        # anchor point
+        if len(self._anchor) == 0:
+            req.append(pack('>L', 0))
+        else:
+            attrlat, attrlong = self._anchor['attrlat'], self._anchor['attrlong']
+            latitude, longitude = self._anchor['lat'], self._anchor['long']
+            req.append(pack('>L', 1))
+            req.append(pack('>L', len(attrlat)) + attrlat)
+            req.append(pack('>L', len(attrlong)) + attrlong)
+            req.append(pack('>f', latitude) + pack('>f', longitude))
+
+        # per-index weights
+        req.append(pack('>L', len(self._indexweights)))
+        for indx, weight in self._indexweights.items():
+            req.append(pack('>L', len(indx)) + indx + pack('>L', weight))
+
+        # max query time
+        req.append(pack('>L', self._maxquerytime))
+
+        # per-field weights
+        req.append(pack('>L', len(self._fieldweights)))
+        for field, weight in self._fieldweights.items():
+            req.append(pack('>L', len(field)) + field + pack('>L', weight))
+
+        # comment
+        # comment = str(comment)
+        # req.append(pack('>L', len(comment)) + comment)
+        req.append(pack('>L', 0))
+
+        # attribute overrides
+        req.append(pack('>L', len(self._overrides)))
+        for v in self._overrides.values():
+            req.extend((pack('>L', len(v['name'])), v['name']))
+            req.append(pack('>LL', v['type'], len(v['values'])))
+            for id, value in v['values'].iteritems():
+                req.append(pack('>Q', id))
+                if v['type'] == const.SPH_ATTR_FLOAT:
+                    req.append(pack('>f', value))
+                elif v['type'] == const.SPH_ATTR_BIGINT:
+                    req.append(pack('>q', value))
+                else:
+                    req.append(pack('>l', value))
+
+        # select-list
+        req.append(pack('>L', len(self._select)))
+        req.append(self._select.encode('utf-8'))
+
+        # import pdb
+        # pdb.set_trace()
+
+        # for i, x in enumerate(req):
+        #     x = str(x)
+        #     try:
+        #         ''.join([x])
+        #     except UnicodeDecodeError:
+        #         print(x)
+        #         print(i)
+        #         raise
+
+        self._reqs.append(b''.join(req))
 
     def status(self):
         # connect, send query, get response
