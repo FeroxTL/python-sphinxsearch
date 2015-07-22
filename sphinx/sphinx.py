@@ -114,12 +114,12 @@ class SphinxClient(object):
 
     def _get_response(self, sock, client_ver):
         (status, ver, length) = unpack('>2HL', sock.recv(8))
-        response = ''
+        response = b''
         left = length
         while left > 0:
             chunk = sock.recv(left)
             if chunk:
-                response += chunk.decode('utf-8')
+                response += chunk
                 left -= len(chunk)
             else:
                 break
@@ -136,7 +136,6 @@ class SphinxClient(object):
                     'len=%s, read=%s)' % (status, ver, length, read))
             else:
                 raise Exception('received zero-sized searchd response')
-            return None
 
         # check status
         if status == const.SEARCHD_WARNING:
@@ -190,8 +189,6 @@ class SphinxClient(object):
             result = {}
             results.append(result)
 
-            result['error'] = ''
-            result['warning'] = ''
             status = unpack('>L', response[p:p+4])[0]
             p += 4
             result['status'] = status
@@ -264,14 +261,14 @@ class SphinxClient(object):
                         slen = unpack('>L', response[p:p+4])[0]
                         p += 4
                         match['attrs'][attrs[i][0]] = ''
-                        if slen>0:
+                        if slen > 0:
                             match['attrs'][attrs[i][0]] = response[p:p+slen]
                         p += slen-4
                     elif attrs[i][1] == const.SPH_ATTR_MULTI:
                         match['attrs'][attrs[i][0]] = []
                         nvals = unpack('>L', response[p:p+4])[0]
                         p += 4
-                        for n in range(0,nvals,1):
+                        for n in range(0, nvals):
                             match['attrs'][attrs[i][0]].append(unpack('>L', response[p:p+4])[0])
                             p += 4
                         p -= 4
@@ -448,10 +445,10 @@ class SphinxClient(object):
         response_len = len(response)
 
         while p < response_len:
-            length = unpack('>L', response[p:p+4].encode('utf-8'))[0]
+            length = unpack('>L', response[p:p+4])[0]
             k = response[p+4:p+length+4]
             p += 4+length
-            length = unpack('>L', response[p:p+4].encode('utf-8'))[0]
+            length = unpack('>L', response[p:p+4])[0]
             v = response[p+4:p+length+4]
             p += 4+length
             res[k] = v
@@ -523,6 +520,6 @@ class SphinxClient(object):
 if __name__ == '__main__':
     cl = SphinxClient()
     print(cl.set_limits(5).query()._populate())
-    # from pprint import pprint
-    # pprint(cl.status())
+    from pprint import pprint
+    pprint(cl.status())
     print('OK')
