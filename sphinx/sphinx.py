@@ -3,10 +3,14 @@ from __future__ import absolute_import, unicode_literals
 
 import select
 import socket
-from struct import pack, unpack
+from six import string_types, integer_types
+from struct import pack, unpack, unpack_from, calcsize
 from re import sub
 
 from . import const
+
+
+__all__ = ['escape', 'SphinxClient']
 
 
 def clone_method(method):
@@ -18,6 +22,16 @@ def clone_method(method):
 
 def escape(self, string):
     return sub(r"([=\(\)|\-!@~\"&/\\\^\$\=])", r"\\\1", string)
+
+
+def format_req(val, fmt='>L'):
+    if isinstance(val, integer_types):
+        return pack(fmt, val)
+    if isinstance(val, string_types):
+        val = val.encode('utf-8')
+        return pack(fmt, len(val)) + val
+    # if isinstance(val, (dict)):
+    raise Exception('Unknown val format')
 
 
 class SphinxClient(object):
@@ -57,6 +71,7 @@ class SphinxClient(object):
         self._min_id = 0
         self._max_id = 0
         self._cutoff = 0
+        self._rankexpr = ''
 
     def _disconnect(self):
         if self._socket:
@@ -140,7 +155,8 @@ class SphinxClient(object):
         # check status
         if status == const.SEARCHD_WARNING:
             wend = 4 + unpack('>L', response[0:4])[0]
-            self._warning = response[4:wend]
+            # TODO: logger
+            print(response[4:wend])
             return response[wend:]
 
         if status == const.SEARCHD_ERROR:
@@ -165,6 +181,17 @@ class SphinxClient(object):
                 ))
 
         return response
+
+    def __get_str(self, resp, offset, fmt='>L'):
+        """
+        Gets string from response from offset
+        """
+        (length,) = unpack_from(fmt, resp, offset)
+        ch_len = calcsize(fmt)
+        return (
+            length + ch_len,  # offset
+            resp[offset + ch_len:offset + length + ch_len].decode('utf-8'),
+        )
 
     def __populate_results(self):
         sock = self._connect()
@@ -308,19 +335,19 @@ class SphinxClient(object):
         return results
 
     @clone_method
-    def query(self, query='', index='*'):
+    def query(self, query='', index='*', comment=''):
         req = []
 
-        req.append(pack('>4L', self._offset, self._limit, self._mode, self._ranker))
+        req.append(pack('>4L', self._offset, self._limit, self._mode,
+                        self._ranker))
         if self._ranker == const.SPH_RANK_EXPR:
-            req.append(pack('>L', len(self._rankexpr)))
-            req.append(self._rankexpr)
-        req.append(pack('>L', self._sort))
-        req.append(pack('>L', len(self._sortby)))
-        req.append(self._sortby.encode('utf-8'))
+            req.append(format_req(len(self._rankexpr)))
+            req.append(format_req(self._rankexpr))
 
-        req.append(pack('>L', len(query.encode('utf-8'))))
-        req.append(query.encode('utf-8'))
+        req.append(format_req(self._sort))
+        req.append(format_req(self._sortby))
+
+        req.append(format_req(query))
 
         # DEPRECATED
         # req.append(pack('>L', len(self._weights)))
@@ -329,17 +356,15 @@ class SphinxClient(object):
         req.append(pack('>L', 0))
 
         try:
-            req.append(pack('>L', len(index)))
-            req.append(index.encode('utf-8'))
+            req.append(format_req(index))
         except UnicodeDecodeError:
             raise RuntimeError('Index must be string')
 
         req.append(pack('>L', 1))  # id64 range marker
-        req.append(pack('>Q', self._min_id))
-        req.append(pack('>Q', self._max_id))
+        req.append(pack('>2Q', self._min_id, self._max_id))
 
         # filters
-        req.append(pack('>L', len(self._filters)))
+        req.append(format_req(len(self._filters)))
         for f in self._filters:
             req.append(pack('>L', len(f['attr'])) + f['attr'])
             filtertype = f['type']
@@ -355,13 +380,12 @@ class SphinxClient(object):
             req.append(pack('>L', f['exclude']))
 
         # group-by, max-matches, group-sort
-        req.append(pack('>2L', self._groupfunc, len(self._groupby)))
-        req.append(self._groupby.encode('utf-8'))
-        req.append(pack('>2L', self._maxmatches, len(self._groupsort)))
-        req.append(self._groupsort.encode('utf-8'))
+        req.append(pack('>L', self._groupfunc))
+        req.append(format_req(self._groupby))
+        req.append(pack('>L', self._maxmatches))
+        req.append(format_req(self._groupsort))
         req.append(pack('>3L', self._cutoff, self._retrycount, self._retrydelay))
-        req.append(pack('>L', len(self._groupdistinct)))
-        req.append(self._groupdistinct.encode('utf-8'))
+        req.append(format_req(self._groupdistinct))
 
         # anchor point
         if len(self._anchor) == 0:
@@ -375,22 +399,21 @@ class SphinxClient(object):
             req.append(pack('>f', latitude) + pack('>f', longitude))
 
         # per-index weights
-        req.append(pack('>L', len(self._indexweights)))
+        req.append(format_req(len(self._indexweights)))
         for indx, weight in self._indexweights.items():
-            req.append(pack('>L', len(indx)) + indx + pack('>L', weight))
+            req.append(format_req(indx))
+            req.append(format_req(weight))
 
         # max query time
-        req.append(pack('>L', self._maxquerytime))
+        req.append(format_req(self._maxquerytime))
 
         # per-field weights
-        req.append(pack('>L', len(self._fieldweights)))
+        req.append(format_req(len(self._fieldweights)))
         for field, weight in self._fieldweights.items():
             req.append(pack('>L', len(field)) + field + pack('>L', weight))
 
         # comment
-        # comment = str(comment)
-        # req.append(pack('>L', len(comment)) + comment)
-        req.append(pack('>L', 0))
+        req.append(format_req(comment))
 
         # attribute overrides
         req.append(pack('>L', len(self._overrides)))
@@ -407,50 +430,29 @@ class SphinxClient(object):
                     req.append(pack('>l', value))
 
         # select-list
-        req.append(pack('>L', len(self._select)))
-        req.append(self._select.encode('utf-8'))
-
-        # import pdb
-        # pdb.set_trace()
-
-        # for i, x in enumerate(req):
-        #     x = str(x)
-        #     try:
-        #         ''.join([x])
-        #     except UnicodeDecodeError:
-        #         print(x)
-        #         print(i)
-        #         raise
+        req.append(format_req(self._select))
 
         self._reqs.append(b''.join(req))
 
     def status(self):
         # connect, send query, get response
         sock = self._connect()
-        if not sock:
-            return None
 
         req = pack('>2HLL', const.SEARCHD_COMMAND_STATUS,
                    const.VER_COMMAND_STATUS, 4, 1)
         self._send(sock, req)
-
         response = self._get_response(sock, const.VER_COMMAND_STATUS)
-        if not response:
-            return None
 
-        # parse response
         res = {}
 
-        p = 8
+        p = 8  # TODO: get this magic number
         response_len = len(response)
 
         while p < response_len:
-            length = unpack('>L', response[p:p+4])[0]
-            k = response[p+4:p+length+4]
-            p += 4+length
-            length = unpack('>L', response[p:p+4])[0]
-            v = response[p+4:p+length+4]
-            p += 4+length
+            (offset, k) = self.__get_str(response, p)
+            p += offset
+            (offset, v) = self.__get_str(response, p)
+            p += offset
             res[k] = v
 
         return res
@@ -519,7 +521,7 @@ class SphinxClient(object):
 
 if __name__ == '__main__':
     cl = SphinxClient()
-    print(cl.set_limits(5).query()._populate())
-    from pprint import pprint
-    pprint(cl.status())
+    print(cl.set_limits(1).query()._populate())
+    # from pprint import pprint
+    # pprint(cl.status())
     print('OK')
