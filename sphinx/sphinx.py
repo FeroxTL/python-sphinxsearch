@@ -7,6 +7,12 @@ from six import string_types, integer_types, iteritems
 from struct import pack, unpack, unpack_from, calcsize
 from re import sub
 
+# PY3
+try:
+    xrange
+except NameError:
+    xrange = range
+
 from . import const
 
 
@@ -191,7 +197,7 @@ class SphinxClient(object):
 
     def __get_str(self, resp, offset, fmt='>L'):
         """
-        Gets string from response from offset
+        Gets string from response with offset
         """
         (length,) = unpack_from(fmt, resp, offset)
         ch_len = calcsize(fmt)
@@ -254,15 +260,12 @@ class SphinxClient(object):
             result['fields'] = fields
 
             nattrs = unpack('>L', response[p:p+4])[0]
-            p += 4
-            while nattrs > 0 and p < max_:
-                nattrs -= 1
-                length = unpack('>L', response[p:p+4])[0]
-                p += 4
-                attr = response[p:p+length]
-                p += length
-                type_ = unpack('>L', response[p:p+4])[0]
-                p += 4
+            p += calcsize('>L')
+            for x in range(nattrs):
+                (offset, attr) = self.__get_str(response, p)
+                p += offset
+                (type_,) = unpack_from('>L', response, p)
+                p += calcsize('>L')
                 attrs.append([attr, type_])
 
             result['attrs'] = attrs
