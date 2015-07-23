@@ -24,16 +24,19 @@ def escape(string):
     return sub(r"([=\(\)|\-!@~\"&/\\\^\$\=])", r"\\\1", string)
 
 
-def format_req(val, fmt='>L'):
+def format_req(val, fmt='>L', len_fmt='>L'):
     if isinstance(val, integer_types):
         return pack(fmt, val)
     if isinstance(val, string_types):
         val = val.encode('utf-8')
         return pack(fmt, len(val)) + val
-    if isinstance(val, (dict)):
-        return format_req(len(val)) + b''.join([
-            format_req(key) + format_req(value)
+    if isinstance(val, (dict,)):
+        return format_req(len(val), len_fmt) + b''.join([
+            format_req(key, fmt) + format_req(value, fmt)
             for key, value in iteritems(val)])
+    if isinstance(val, (list,)):
+        return format_req(len(val), len_fmt) + b''.join([
+            format_req(key, fmt) for key in val])
     raise Exception('Unknown val format')
 
 
@@ -163,10 +166,11 @@ class SphinxClient(object):
             return response[wend:]
 
         if status == const.SEARCHD_ERROR:
-            raise Exception('searchd error: ' + response[4:])
+            raise Exception('searchd error: ' + response[4:].decode('utf-8'))
 
         if status == const.SEARCHD_RETRY:
-            raise Exception('temporary searchd error: ' + response[4:])
+            raise Exception(
+                'temporary searchd error: ' + response[4:].decode('utf-8'))
 
         if status != const.SEARCHD_OK:
             raise Exception('unknown status code %d' % status)
@@ -376,18 +380,16 @@ class SphinxClient(object):
 
         req.append(format_req(len(self._filters)))
         for f in self._filters:
-            req.append(pack('>L', len(f['attr'])) + f['attr'])
+            req.append(format_req(f['attr']))
             filtertype = f['type']
             req.append(pack('>L', filtertype))
             if filtertype == const.SPH_FILTER_VALUES:
-                req.append(pack('>L', len(f['values'])))
-                for val in f['values']:
-                    req.append(pack('>q', val))
+                req.append(format_req(f['values'], fmt='>q'))
             elif filtertype == const.SPH_FILTER_RANGE:
                 req.append(pack('>2q', f['min'], f['max']))
             elif filtertype == const.SPH_FILTER_FLOATRANGE:
                 req.append(pack('>2f', f['min'], f['max']))
-            req.append(pack('>L', f['exclude']))
+            req.append(format_req(f['exclude']))
 
         return b''.join(req)
 
@@ -531,13 +533,13 @@ class SphinxClient(object):
 
     @clone_method
     def filter(self, **kwargs):
-        exclude = bool(kwargs.pop('exclude'))
+        exclude = bool(kwargs.pop('exclude', False))
         for key, value in kwargs.items():
             self._filters.append({
-                'type': const.SPH_FILTER_VALUES,
                 'attr': key,
-                'exclude': bool(exclude),
                 'values': value,
+                'type': const.SPH_FILTER_VALUES,
+                'exclude': bool(exclude),
             })
 
     @clone_method
@@ -548,7 +550,9 @@ class SphinxClient(object):
 
 if __name__ == '__main__':
     cl = SphinxClient()
-    print(cl.set_limits(1).query()._populate())
+    rez = cl.set_limits(1).filter(salary_from=[123]).query()._populate()
+    print(rez)
+    print(rez[0]['total_found'])
     # from pprint import pprint
     # pprint(cl.status())
     print('OK')
