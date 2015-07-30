@@ -6,6 +6,7 @@ import socket
 from six import string_types, integer_types, iteritems
 from struct import pack, unpack, unpack_from, calcsize
 from re import sub
+from collections import namedtuple
 
 # PY3
 try:
@@ -24,6 +25,9 @@ from . import const
 
 
 __all__ = ['escape', 'SphinxClient']
+
+
+Attr = namedtuple('Attr', ['name', 'type'])
 
 
 def format_req(val, fmt='>L', len_fmt='>L'):
@@ -202,7 +206,6 @@ class SphinxClient(object):
 
         # check version
         if ver < client_ver:
-            # TODO: logger
             raise Exception(
                 'searchd command v.%d.%d older than client\'s v.%d.%d, '
                 'some options might not work' % (
@@ -213,23 +216,6 @@ class SphinxClient(object):
                 ))
 
         return response
-
-    def __get_str(self, resp, offset, fmt='>L'):
-        """
-        Gets string from response with offset
-        """
-        (length,) = unpack_from(fmt, resp, offset)
-        ch_len = calcsize(fmt)
-        return (
-            length + ch_len,  # offset
-            resp[offset + ch_len:offset + length + ch_len].decode('utf-8'),
-        )
-
-    def __get_int(self, resp, offset, fmt='>L'):
-        return (
-            calcsize(fmt),  # offset
-            unpack_from(fmt, resp, offset)[0],
-        )
 
     def __populate_results(self):
         sock = self._connect()
@@ -243,8 +229,8 @@ class SphinxClient(object):
         return self._get_response(sock, const.VER_COMMAND_SEARCH)
 
     def _populate(self):
-        f_response = SResponse(self.__populate_results())
-        f_response.seek(0)
+        response = SResponse(self.__populate_results())
+        response.seek(0)
 
         nreqs = len(self._reqs)
 
@@ -253,11 +239,11 @@ class SphinxClient(object):
             result = {}
             results.append(result)
 
-            status = f_response.read_int()
+            status = response.read_int()
 
             result['status'] = status
             if status != const.SEARCHD_OK:
-                message = f_response.read_str()
+                message = response.read_str()
 
                 if status == const.SEARCHD_WARNING:
                     result['warning'] = message
@@ -269,74 +255,69 @@ class SphinxClient(object):
             fields = []
             attrs = []
 
-            nfields = f_response.read_int()
-            while nfields > 0:
-                nfields -= 1
-                fields.append(f_response.read_str())
+            for x in range(response.read_int()):
+                fields.append(response.read_str())
 
             result['fields'] = fields
 
-            nattrs = f_response.read_int()
+            nattrs = response.read_int()
             for x in range(nattrs):
-                attrs.append([f_response.read_str(), f_response.read_int()])
+                attrs.append(Attr(response.read_str(), response.read_int()))
 
             result['attrs'] = attrs
 
             # read match count
-            count = f_response.read_int()
-            id64 = f_response.read_int()
+            count = response.read_int()
+            id64 = response.read_int()
 
             # read matches
             result['matches'] = []
-            while count > 0:
-                count -= 1
+            for x in range(count):
                 if id64:
-                    doc = f_response.read_int('>Q')
-                    weight = f_response.read_int()
+                    doc = response.read_int('>Q')
+                    weight = response.read_int()
                 else:
-                    doc = f_response.read_int()
-                    weight = f_response.read_int()
+                    doc = response.read_int()
+                    weight = response.read_int()
 
                 match = {'id': doc, 'weight': weight, 'attrs': {}}
                 for attr in attrs:
-                    if attr[1] == const.SPH_ATTR_FLOAT:
-                        match['attrs'][attr[0]] = f_response.read_int('>f')
-                    elif attr[1] == const.SPH_ATTR_BIGINT:
-                        match['attrs'][attr[0]] = f_response.read_int('>q')
-                    elif attr[1] == const.SPH_ATTR_STRING:
-                        match['attrs'][attr[0]] = f_response.read_str()
-                    elif attr[1] == const.SPH_ATTR_MULTI:
-                        match['attrs'][attr[0]] = []
-                        nvals = f_response.read_int()
+                    if attr.type == const.SPH_ATTR_FLOAT:
+                        match['attrs'][attr.name] = response.read_int('>F')
+                    elif attr.type == const.SPH_ATTR_BIGINT:
+                        match['attrs'][attr.name] = response.read_int('>Q')
+                    elif attr.type == const.SPH_ATTR_STRING:
+                        match['attrs'][attr.name] = response.read_str()
+                    elif attr.type == const.SPH_ATTR_MULTI:
+                        match['attrs'][attr.name] = []
+                        nvals = response.read_int()
                         for n in range(0, nvals):
-                            match['attrs'][attr[0]].append(f_response.read_int())
-                    elif attr[1] == const.SPH_ATTR_MULTI64:
-                        match['attrs'][attr[0]] = []
-                        nvals = f_response.read_int()
+                            match['attrs'][attr.name].append(response.read_int())
+                    elif attr.type == const.SPH_ATTR_MULTI64:
+                        match['attrs'][attr.name] = []
+                        nvals = response.read_int()
                         nvals = nvals / 2
                         for n in range(0, nvals):
-                            match['attrs'][attr[0]].append(f_response.read_int('>q'))
+                            match['attrs'][attr.name].append(response.read_int('>Q'))
                     else:
-                        match['attrs'][attr[0]] = f_response.read_int()
+                        match['attrs'][attr.name] = response.read_int()
 
                 result['matches'].append(match)
 
-            result['total'] = f_response.read_int()
-            result['total_found'] = f_response.read_int()
-            result['time'] = '%.3f' % (f_response.read_int() / 1000.0)
-            words = f_response.read_int()
+            result['total'] = response.read_int()
+            result['total_found'] = response.read_int()
+            result['time'] = '%.3f' % (response.read_int() / 1000.0)
 
             result['words'] = []
-            while words > 0:
-                words -= 1
-                word = f_response.read_str()
-                docs = f_response.read_int()
-                hits = f_response.read_int()
+            for x in range(response.read_int()):
+                word = response.read_str()
+                docs = response.read_int()
+                hits = response.read_int()
 
                 result['words'].append({'word': word, 'docs': docs, 'hits': hits})
 
         self._reqs = []
-        f_response.close()
+        response.close()
         return results
 
     def __query_base(self):
@@ -465,21 +446,21 @@ class SphinxClient(object):
         # connect, send query, get response
         sock = self._connect()
 
-        req = pack('>2HLL', const.SEARCHD_COMMAND_STATUS,
-                   const.VER_COMMAND_STATUS, 4, 1)
-        self._send(sock, req)
-        response = self._get_response(sock, const.VER_COMMAND_STATUS)
+        self._send(
+            sock,
+            pack('>2HLL', const.SEARCHD_COMMAND_STATUS,
+                 const.VER_COMMAND_STATUS, 4, 1)
+        )
+        response = SResponse(
+            self._get_response(sock, const.VER_COMMAND_STATUS))
 
         res = {}
 
-        p = 8  # TODO: get this magic number
-        response_len = len(response)
-
-        while p < response_len:
-            (offset, k) = self.__get_str(response, p)
-            p += offset
-            (offset, v) = self.__get_str(response, p)
-            p += offset
+        response.read(8)  # TODO: get this magic number
+        response_len = response.len
+        while response_len > response.tell():
+            k = response.read_str()
+            v = response.read_str()
             res[k] = v
 
         return res
