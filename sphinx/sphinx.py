@@ -4,7 +4,7 @@ from __future__ import absolute_import, unicode_literals
 import select
 import socket
 from six import string_types, integer_types, iteritems
-from struct import pack, unpack, unpack_from, calcsize
+from struct import pack, unpack, calcsize, error
 from re import sub
 from collections import namedtuple
 
@@ -280,28 +280,26 @@ class SphinxClient(object):
                     doc = response.read_int()
                     weight = response.read_int()
 
-                match = {'id': doc, 'weight': weight, 'attrs': {}}
+                match_attrs = {}
                 for attr in attrs:
                     if attr.type == const.SPH_ATTR_FLOAT:
-                        match['attrs'][attr.name] = response.read_int('>F')
+                        match_attrs[attr.name] = response.read_int('>F')
                     elif attr.type == const.SPH_ATTR_BIGINT:
-                        match['attrs'][attr.name] = response.read_int('>Q')
+                        match_attrs[attr.name] = response.read_int('>Q')
                     elif attr.type == const.SPH_ATTR_STRING:
-                        match['attrs'][attr.name] = response.read_str()
+                        match_attrs[attr.name] = response.read_str()
                     elif attr.type == const.SPH_ATTR_MULTI:
-                        match['attrs'][attr.name] = []
                         nvals = response.read_int()
-                        for n in range(0, nvals):
-                            match['attrs'][attr.name].append(response.read_int())
+                        match_attrs[attr.name] = [response.read_int()
+                                                  for n in range(0, nvals)]
                     elif attr.type == const.SPH_ATTR_MULTI64:
-                        match['attrs'][attr.name] = []
-                        nvals = response.read_int()
-                        nvals = nvals / 2
-                        for n in range(0, nvals):
-                            match['attrs'][attr.name].append(response.read_int('>Q'))
+                        nvals = response.read_int() / 2
+                        match_attrs[attr.name] = [response.read_int('>Q')
+                                                  for n in range(0, nvals)]
                     else:
-                        match['attrs'][attr.name] = response.read_int()
+                        match_attrs[attr.name] = response.read_int()
 
+                match = {'id': doc, 'weight': weight, 'attrs': match_attrs}
                 result['matches'].append(match)
 
             result['total'] = response.read_int()
@@ -457,11 +455,13 @@ class SphinxClient(object):
         res = {}
 
         response.read(8)  # TODO: get this magic number
-        response_len = response.len
-        while response_len > response.tell():
-            k = response.read_str()
-            v = response.read_str()
-            res[k] = v
+        while True:
+            try:
+                k = response.read_str()
+                v = response.read_str()
+                res[k] = v
+            except error:
+                break
 
         return res
 
