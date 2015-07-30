@@ -13,21 +13,17 @@ try:
 except NameError:
     xrange = range
 
+# TODO: rewrite response parsing to to cStringIO
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import BytesIO as StringIO
+
+
 from . import const
 
 
 __all__ = ['escape', 'SphinxClient']
-
-
-def clone_method(method):
-    def wrapper(self, *args, **kwargs):
-        method(self, *args, **kwargs)
-        return self
-    return wrapper
-
-
-def escape(string):
-    return sub(r"([=\(\)|\-!@~\"&/\\\^\$\=])", r"\\\1", string)
 
 
 def format_req(val, fmt='>L', len_fmt='>L'):
@@ -44,6 +40,29 @@ def format_req(val, fmt='>L', len_fmt='>L'):
         return format_req(len(val), len_fmt) + b''.join([
             format_req(key, fmt) for key in val])
     raise Exception('Unknown val format')
+
+
+class SResponse(StringIO):
+    def read_int(self, fmt='>L'):
+        return unpack(fmt, self.read(calcsize(fmt)))[0]
+
+    def read_str(self, fmt='>L'):
+        length = self.read_int(fmt)
+        return self.read(length).decode('utf-8')
+
+    def write_fmt(self, val):
+        self.write(format_req(val))
+
+
+def clone_method(method):
+    def wrapper(self, *args, **kwargs):
+        method(self, *args, **kwargs)
+        return self
+    return wrapper
+
+
+def escape(string):
+    return sub(r"([=\(\)|\-!@~\"&/\\\^\$\=])", r"\\\1", string)
 
 
 class SphinxClient(object):
@@ -206,6 +225,12 @@ class SphinxClient(object):
             resp[offset + ch_len:offset + length + ch_len].decode('utf-8'),
         )
 
+    def __get_int(self, resp, offset, fmt='>L'):
+        return (
+            calcsize(fmt),  # offset
+            unpack_from(fmt, resp, offset)[0],
+        )
+
     def __populate_results(self):
         sock = self._connect()
 
@@ -218,25 +243,21 @@ class SphinxClient(object):
         return self._get_response(sock, const.VER_COMMAND_SEARCH)
 
     def _populate(self):
-        response = self.__populate_results()
+        f_response = SResponse(self.__populate_results())
+        f_response.seek(0)
 
         nreqs = len(self._reqs)
-        max_ = len(response)
-        p = 0
 
         results = []
         for i in range(0, nreqs):
             result = {}
             results.append(result)
 
-            status = unpack('>L', response[p:p+4])[0]
-            p += 4
+            status = f_response.read_int()
+
             result['status'] = status
             if status != const.SEARCHD_OK:
-                length = unpack('>L', response[p:p+4])[0]
-                p += 4
-                message = response[p:p+length]
-                p += length
+                message = f_response.read_str()
 
                 if status == const.SEARCHD_WARNING:
                     result['warning'] = message
@@ -248,100 +269,74 @@ class SphinxClient(object):
             fields = []
             attrs = []
 
-            nfields = unpack('>L', response[p:p+4])[0]
-            p += 4
-            while nfields > 0 and p < max_:
+            nfields = f_response.read_int()
+            while nfields > 0:
                 nfields -= 1
-                length = unpack('>L', response[p:p+4])[0]
-                p += 4
-                fields.append(response[p:p+length])
-                p += length
+                fields.append(f_response.read_str())
 
             result['fields'] = fields
 
-            nattrs = unpack('>L', response[p:p+4])[0]
-            p += calcsize('>L')
+            nattrs = f_response.read_int()
             for x in range(nattrs):
-                (offset, attr) = self.__get_str(response, p)
-                p += offset
-                (type_,) = unpack_from('>L', response, p)
-                p += calcsize('>L')
-                attrs.append([attr, type_])
+                attrs.append([f_response.read_str(), f_response.read_int()])
 
             result['attrs'] = attrs
 
             # read match count
-            count = unpack('>L', response[p:p+4])[0]
-            p += 4
-            id64 = unpack('>L', response[p:p+4])[0]
-            p += 4
+            count = f_response.read_int()
+            id64 = f_response.read_int()
 
             # read matches
             result['matches'] = []
-            while count > 0 and p < max_:
+            while count > 0:
                 count -= 1
                 if id64:
-                    doc, weight = unpack('>QL', response[p:p+12])
-                    p += 12
+                    doc = f_response.read_int('>Q')
+                    weight = f_response.read_int()
                 else:
-                    doc, weight = unpack('>2L', response[p:p+8])
-                    p += 8
+                    doc = f_response.read_int()
+                    weight = f_response.read_int()
 
                 match = {'id': doc, 'weight': weight, 'attrs': {}}
-                for i in range(len(attrs)):
-                    if attrs[i][1] == const.SPH_ATTR_FLOAT:
-                        match['attrs'][attrs[i][0]] = unpack('>f', response[p:p+4])[0]
-                    elif attrs[i][1] == const.SPH_ATTR_BIGINT:
-                        match['attrs'][attrs[i][0]] = unpack('>q', response[p:p+8])[0]
-                        p += 4
-                    elif attrs[i][1] == const.SPH_ATTR_STRING:
-                        slen = unpack('>L', response[p:p+4])[0]
-                        p += 4
-                        match['attrs'][attrs[i][0]] = ''
-                        if slen > 0:
-                            match['attrs'][attrs[i][0]] = response[p:p+slen]
-                        p += slen-4
-                    elif attrs[i][1] == const.SPH_ATTR_MULTI:
-                        match['attrs'][attrs[i][0]] = []
-                        nvals = unpack('>L', response[p:p+4])[0]
-                        p += 4
+                for attr in attrs:
+                    if attr[1] == const.SPH_ATTR_FLOAT:
+                        match['attrs'][attr[0]] = f_response.read_int('>f')
+                    elif attr[1] == const.SPH_ATTR_BIGINT:
+                        match['attrs'][attr[0]] = f_response.read_int('>q')
+                    elif attr[1] == const.SPH_ATTR_STRING:
+                        match['attrs'][attr[0]] = f_response.read_str()
+                    elif attr[1] == const.SPH_ATTR_MULTI:
+                        match['attrs'][attr[0]] = []
+                        nvals = f_response.read_int()
                         for n in range(0, nvals):
-                            match['attrs'][attrs[i][0]].append(unpack('>L', response[p:p+4])[0])
-                            p += 4
-                        p -= 4
-                    elif attrs[i][1] == const.SPH_ATTR_MULTI64:
-                        match['attrs'][attrs[i][0]] = []
-                        nvals = unpack('>L', response[p:p+4])[0]
-                        nvals = nvals/2
-                        p += 4
+                            match['attrs'][attr[0]].append(f_response.read_int())
+                    elif attr[1] == const.SPH_ATTR_MULTI64:
+                        match['attrs'][attr[0]] = []
+                        nvals = f_response.read_int()
+                        nvals = nvals / 2
                         for n in range(0, nvals):
-                            match['attrs'][attrs[i][0]].append(unpack('>q', response[p:p+8])[0])
-                            p += 8
-                        p -= 4
+                            match['attrs'][attr[0]].append(f_response.read_int('>q'))
                     else:
-                        match['attrs'][attrs[i][0]] = unpack('>L', response[p:p+4])[0]
-                    p += 4
+                        match['attrs'][attr[0]] = f_response.read_int()
 
                 result['matches'].append(match)
 
-            result['total'], result['total_found'], result['time'], words = unpack('>4L', response[p:p+16])
-
-            result['time'] = '%.3f' % (result['time']/1000.0)
-            p += 16
+            result['total'] = f_response.read_int()
+            result['total_found'] = f_response.read_int()
+            result['time'] = '%.3f' % (f_response.read_int() / 1000.0)
+            words = f_response.read_int()
 
             result['words'] = []
             while words > 0:
                 words -= 1
-                length = unpack('>L', response[p:p+4])[0]
-                p += 4
-                word = response[p:p+length]
-                p += length
-                docs, hits = unpack('>2L', response[p:p+8])
-                p += 8
+                word = f_response.read_str()
+                docs = f_response.read_int()
+                hits = f_response.read_int()
 
                 result['words'].append({'word': word, 'docs': docs, 'hits': hits})
 
         self._reqs = []
+        f_response.close()
         return results
 
     def __query_base(self):
@@ -555,7 +550,8 @@ if __name__ == '__main__':
     cl = SphinxClient()
     rez = cl.set_limits(1).filter(salary_from=[123]).query()._populate()
     print(rez)
-    print(rez[0]['total_found'])
+    if len(rez) > 0 and 'total_found' in rez[0]:
+        print(rez[0]['total_found'])
     # from pprint import pprint
     # pprint(cl.status())
     print('OK')
