@@ -208,17 +208,19 @@ class SphinxClient(object):
     def __populate_results(self):
         sock = self._connect()
 
+        if not self._reqs:
+            self = self.query()
+
         req = b''.join(self._reqs)
-        length = len(req) + 8
 
         self._send(sock, pack('>HHLLL', const.SEARCHD_COMMAND_SEARCH,
-                   const.VER_COMMAND_SEARCH, length, 0, len(self._reqs)) + req)
+                   const.VER_COMMAND_SEARCH, len(req) + 8, 0,
+                   len(self._reqs)) + req)
 
         return self._get_response(sock, const.VER_COMMAND_SEARCH)
 
     def _populate(self):
         response = SResponse(self.__populate_results())
-        response.seek(0)
 
         nreqs = len(self._reqs)
 
@@ -351,7 +353,7 @@ class SphinxClient(object):
             if filtertype == const.SPH_FILTER_VALUES:
                 req.append(format_req(f['values'], fmt='>q'))
             elif filtertype == const.SPH_FILTER_RANGE:
-                req.append(pack('>2q', f['min'], f['max']))
+                req.append(pack('>2Q', f['min'], f['max']))
             elif filtertype == const.SPH_FILTER_FLOATRANGE:
                 req.append(pack('>2f', f['min'], f['max']))
             req.append(format_req(f['exclude']))
@@ -400,7 +402,7 @@ class SphinxClient(object):
                 if v['type'] == const.SPH_ATTR_FLOAT:
                     req.append(pack('>f', value))
                 elif v['type'] == const.SPH_ATTR_BIGINT:
-                    req.append(pack('>q', value))
+                    req.append(pack('>Q', value))
                 else:
                     req.append(pack('>l', value))
 
@@ -426,10 +428,10 @@ class SphinxClient(object):
             format_req(self._select),  # select-list
         ]
 
+        self._reset()
         self._reqs.append(b''.join(req))
 
     def status(self):
-        # connect, send query, get response
         sock = self._connect()
 
         self._send(
@@ -442,14 +444,12 @@ class SphinxClient(object):
 
         res = {}
 
-        response.read(8)  # TODO: get this magic number
-        while True:
-            try:
-                k = response.read_str()
-                v = response.read_str()
-                res[k] = v
-            except error:
-                break
+        total = response.read_int()
+        response.read(4)  # TODO: get this magic number
+        for x in range(total):
+            k = response.read_str()
+            v = response.read_str()
+            res[k] = v
 
         return res
 
@@ -517,7 +517,7 @@ class SphinxClient(object):
 
 if __name__ == '__main__':
     cl = SphinxClient()
-    rez = cl.set_limits(1).filter(salary_from=[123]).query()._populate()
+    rez = cl.set_limits(1).filter(salary_from=[123])._populate()
     print(rez)
     if len(rez) > 0 and 'total_found' in rez[0]:
         print(rez[0]['total_found'])
