@@ -3,24 +3,12 @@ from __future__ import absolute_import, unicode_literals
 
 import select
 import socket
-from six import string_types, integer_types, iteritems
+
+from six import string_types, integer_types, iteritems, BytesIO
+from six.moves import range
 from struct import pack, unpack, calcsize, error
 from re import sub
 from collections import namedtuple
-
-# PY3
-try:
-    xrange
-except NameError:
-    xrange = range
-
-# TODO: rewrite response parsing to to cStringIO
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import BytesIO as StringIO
-
-
 from . import const
 
 
@@ -46,7 +34,7 @@ def format_req(val, fmt='>L', len_fmt='>L'):
     raise Exception('Unknown val format')
 
 
-class SResponse(StringIO):
+class SResponse(BytesIO):
     def read_int(self, fmt='>L'):
         return unpack(fmt, self.read(calcsize(fmt)))[0]
 

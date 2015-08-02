@@ -180,6 +180,9 @@ class BaseTests(unittest.TestCase):
             RakutenProducts._meta.name,
         )
 
+        # abstract indexes have no name
+        self.assertRaises(Exception, lambda: AnyshopProducts.get_index_names())
+
     def test_server_start(self):
         engine = self.local_engine
 

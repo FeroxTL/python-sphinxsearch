@@ -173,6 +173,9 @@ class Index(with_metaclass(IndexMeta, object)):
 
     @classmethod
     def get_index_names(cls):
+        if cls._meta.abstract:
+            raise Exception('Can not get abstract index name {0}'.format(
+                cls.__name__))
         names = (cls._meta.name,)
         if cls._meta.delta:
             delta_index_name = '{0}_delta : {0}'.format(cls._meta._name)
