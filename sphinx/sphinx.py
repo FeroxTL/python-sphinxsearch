@@ -4,6 +4,7 @@ from __future__ import absolute_import, unicode_literals
 import select
 import socket
 
+from collections import Iterable
 from six import string_types, integer_types, iteritems, BytesIO
 from six.moves import range
 from struct import pack, unpack, calcsize, error
@@ -498,16 +499,38 @@ class SphinxClient(object):
         if index_weights:
             self._indexweights = index_weights
 
+    def add_filter(self, attr, filter_type, value, exclude):
+        try:
+            old_filter = next(
+                obj for obj in self._filters
+                if (obj['type'] == filter_type and
+                    obj['attr'] == attr and
+                    obj['exclude'] == exclude)
+            )
+            old_filter['values'].append(value)
+        except StopIteration:
+            if not isinstance(value, (list, tuple)):
+                value = [value]
+
+            self._filters.append({
+                'attr': attr,
+                'values': value,
+                'type': filter_type,
+                'exclude': bool(exclude),
+            })
+
     @clone_method
     def filter(self, **kwargs):
         exclude = bool(kwargs.pop('exclude', False))
         for key, value in kwargs.items():
-            self._filters.append({
-                'attr': key,
-                'values': value,
-                'type': const.SPH_FILTER_VALUES,
-                'exclude': bool(exclude),
-            })
+            
+            self.add_filter(
+                attr=key,
+                value=value,
+                filter_type=const.SPH_FILTER_VALUES,
+                exclude=exclude)
+
+        print(self._filters)
 
     @clone_method
     def extra(self, select=None):
@@ -517,7 +540,8 @@ class SphinxClient(object):
 
 if __name__ == '__main__':
     cl = SphinxClient()
-    rez = cl.set_limits(1).filter(salary_from=[123])._populate()
+    # rez = cl.set_limits(1).filter(salary_from=123, position='asd')._populate()
+    rez = cl.set_limits(1).filter(salary_from=123).filter(salary_from=321)._populate()
     print(rez)
     if len(rez) > 0 and 'total_found' in rez[0]:
         print(rez[0]['total_found'])
